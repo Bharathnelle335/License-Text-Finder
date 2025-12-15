@@ -282,5 +282,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         if st.button("⬅️ Back to search results", key="detail_back_bottom"):
             st.session_state.view = "home"
             st.rerun()
-``
 
