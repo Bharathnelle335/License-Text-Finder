@@ -205,6 +205,7 @@ with st.expander("📚 Browse all licenses (dropdown)"):
     if choice and choice != "-- Select --":
         st.session_state.selected_license = choice
         st.session_state.view = "details"
+        st.rerun()  # ensure navigation updates immediately
 
 # Filters (optional): by family
 with st.expander("🧮 Filter by License Family (optional)"):
@@ -257,7 +258,7 @@ if st.session_state.view == "home":
             if c4.button("View", key=f"view_{i}"):
                 st.session_state.selected_license = row["License Name"]
                 st.session_state.view = "details"
-                st.experimental_rerun()
+                st.rerun()  # updated API
 
     elif results is not None and len(results) == 0:
         st.warning("No matches found. Try different keywords.")
@@ -291,5 +292,5 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         # Back button
         if st.button("⬅️ Back to search results"):
             st.session_state.view = "home"
-            st.experimental_rerun()
+           
 
