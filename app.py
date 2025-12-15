@@ -20,6 +20,7 @@ def tokenize(text: str):
     """Split text into lowercase word tokens."""
     return re.findall(r"\w+", (text or "").lower())
 
+
 def word_match_score(query: str, target: str) -> float:
     """
     Simple percentage match:
@@ -32,24 +33,45 @@ def word_match_score(query: str, target: str) -> float:
     found = sum(1 for w in q_tokens if w in t_tokens)
     return round((found / len(q_tokens)) * 100.0, 2)
 
+
 def contains_any(query: str, target: str) -> bool:
     """Return True if any query word is found in target text."""
     q_tokens = set(tokenize(query))
     t_tokens = set(tokenize(target))
     return any(w in t_tokens for w in q_tokens)
 
+
 def highlight_text(text: str, query: str) -> str:
     """Highlight query words in text using <mark>…</mark> (case-insensitive)."""
     if not text or not query:
         return text or ""
+
     def repl(match):
         return f"<mark>{match.group(0)}</mark>"
+
     highlighted = text
     for word in sorted(set(tokenize(query)), key=len, reverse=True):
         # Use word boundary to avoid partials inside other words
         pattern = re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE)
         highlighted = pattern.sub(repl, highlighted)
     return highlighted
+
+
+def to_raw_url(maybe_github_url: str) -> str:
+    """
+    Convert GitHub blob URL to raw.githubusercontent URL if needed.
+    """
+    if not maybe_github_url:
+        return maybe_github_url
+    if "github.com" in maybe_github_url and "/blob/" in maybe_github_url:
+        parts = maybe_github_url.split("github.com/")[-1]
+        # e.g., Bharathnelle335/License-Text-Finder/blob/main/Licenses.xlsx
+        owner_repo, _, branch_and_path = parts.partition("/blob/")
+        branch, _, path = branch_and_path.partition("/")
+        raw = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{path}"
+        return raw
+    return maybe_github_url
+
 
 @st.cache_data(show_spinner=False)
 def load_excel(source: str) -> pd.DataFrame:
@@ -61,6 +83,10 @@ def load_excel(source: str) -> pd.DataFrame:
     """
     if not source:
         raise ValueError("Please provide a valid Excel path or raw URL.")
+
+    # Allow GitHub page URL; convert to raw
+    source = to_raw_url(source.strip())
+
     parsed = urlparse(source)
     is_url = parsed.scheme in ("http", "https")
 
@@ -96,6 +122,7 @@ def load_excel(source: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["License Name"], keep="first").reset_index(drop=True)
     return df
 
+
 def run_name_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     if not query.strip():
         return pd.DataFrame()
@@ -105,6 +132,7 @@ def run_name_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
     return subset
 
+
 def run_text_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     if not query.strip():
         return pd.DataFrame()
@@ -113,6 +141,7 @@ def run_text_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     subset["Match %"] = subset["License Text"].apply(lambda x: word_match_score(query, x))
     subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
     return subset
+
 
 # -----------------------------
 # Session state keys
@@ -134,8 +163,13 @@ if "df" not in st.session_state:
 st.sidebar.header("📄 Data Source")
 st.sidebar.write("Provide a local Excel path or a GitHub **raw** URL.")
 
-default_hint = "e.g., ./licenses.xlsx or https://raw.githubusercontent.com/<org>/<repo>/<branch>/licenses.xlsx"
-source_input = st.sidebar.text_input("Excel path or raw URL", value=st.session_state.data_source or "", placeholder=default_hint)
+# Pre-fill with the user's repo raw URL
+default_raw = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
+source_input = st.sidebar.text_input(
+    "Excel path or raw URL",
+    value=st.session_state.data_source or default_raw,
+    placeholder="e.g., ./Licenses.xlsx or a GitHub raw URL",
+)
 load_btn = st.sidebar.button("Load Excel")
 
 if load_btn and source_input.strip():
@@ -147,10 +181,16 @@ if load_btn and source_input.strip():
     except Exception as e:
         st.sidebar.error(f"Failed to load Excel: {e}")
 
-# If not loaded yet, show a small tip
+# If not loaded yet, try auto-load default
 if st.session_state.df is None:
-    st.info("👋 Paste your Excel path/URL in the sidebar and click **Load Excel** to begin.")
-    st.stop()
+    try:
+        df = load_excel(default_raw)
+        st.session_state.df = df
+        st.session_state.data_source = default_raw
+        st.sidebar.success(f"Auto-loaded {len(df)} licenses from default raw URL.")
+    except Exception:
+        st.info("👋 Paste your Excel path/URL in the sidebar and click **Load Excel** to begin.")
+        st.stop()
 
 df = st.session_state.df
 
@@ -167,6 +207,13 @@ with st.expander("📚 Browse all licenses (dropdown)"):
         st.session_state.selected_license = choice
         st.session_state.view = "details"
 
+# Filters (optional): by family
+with st.expander("🧮 Filter by License Family (optional)"):
+    families = sorted(df["License Family"].unique())
+    fam_choice = st.multiselect("Limit searches to these families:", families, default=[])
+    if fam_choice:
+        df = df[df["License Family"].isin(fam_choice)].reset_index(drop=True)
+
 # Search inputs
 st.subheader("Search")
 col1, col2 = st.columns(2)
@@ -182,9 +229,13 @@ if st.session_state.view == "home":
     if name_search_btn:
         results = run_name_search(df, name_query)
         st.session_state.last_results = results
+        st.session_state.last_query = name_query
+        st.session_state.last_query_type = "name"
     if text_search_btn:
         results = run_text_search(df, text_query)
         st.session_state.last_results = results
+        st.session_state.last_query = text_query
+        st.session_state.last_query_type = "text"
 
     # Show results (if any)
     results = st.session_state.last_results
@@ -194,7 +245,7 @@ if st.session_state.view == "home":
         csv_bytes = results[["License Name", "License Family", "Match %"]].to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download results (CSV)", data=csv_bytes, file_name="license_search_results.csv", mime="text/csv")
 
-        # Table with action buttons
+        # Show a compact table
         st.dataframe(results[["License Name", "License Family", "Match %"]], use_container_width=True)
 
         st.divider()
@@ -214,7 +265,7 @@ if st.session_state.view == "home":
 
 # Details view
 if st.session_state.view == "details" and st.session_state.selected_license:
-    sel = df[df["License Name"] == st.session_state.selected_license].head(1)
+    sel = st.session_state.df[st.session_state.df["License Name"] == st.session_state.selected_license].head(1)
     if sel.empty:
         st.error("Selected license not found.")
     else:
@@ -223,11 +274,11 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.caption(f"License Family: {row['License Family']}")
 
         # Show highlighted text if the recent query exists
-        recent_query = text_query if text_search_btn else (name_query if name_search_btn else "")
-        if recent_query.strip():
+        recent_query = st.session_state.get("last_query", "")
+        if str(recent_query).strip():
             st.markdown("**Highlighted text (matches marked):**", help="Matches are case-insensitive word hits.")
             st.markdown(
-                highlight_text(row["License Text"], recent_query),
+                highlight_text(row["License Text"], str(recent_query)),
                 unsafe_allow_html=True
             )
             st.divider()
@@ -243,3 +294,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.session_state.view = "home"
             st.experimental_rerun()
 ``
+
