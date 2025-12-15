@@ -10,7 +10,7 @@ import streamlit as st
 # -----------------------------
 # App Config
 # -----------------------------
-st.set_page_config(page_title="License Search UI", layout="wide")
+st.set_page_config(page_title="license search", layout="wide")
 
 # -----------------------------
 # Utilities
@@ -50,16 +50,13 @@ def highlight_text(text: str, query: str) -> str:
 
     highlighted = text
     for word in sorted(set(tokenize(query)), key=len, reverse=True):
-        # Use word boundary to avoid partials inside other words
         pattern = re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE)
         highlighted = pattern.sub(repl, highlighted)
     return highlighted
 
 
 def to_raw_url(maybe_github_url: str) -> str:
-    """
-    Convert GitHub blob URL to raw.githubusercontent URL if needed.
-    """
+    """Convert GitHub blob URL to raw.githubusercontent URL if needed."""
     if not maybe_github_url:
         return maybe_github_url
     if "github.com" in maybe_github_url and "/blob/" in maybe_github_url:
@@ -83,9 +80,7 @@ def load_excel(source: str) -> pd.DataFrame:
     if not source:
         raise ValueError("Please provide a valid Excel path or raw URL.")
 
-    # Allow GitHub page URL; convert to raw
     source = to_raw_url(source.strip())
-
     parsed = urlparse(source)
     is_url = parsed.scheme in ("http", "https")
 
@@ -100,24 +95,19 @@ def load_excel(source: str) -> pd.DataFrame:
             buf.seek(0)
             df = pd.read_excel(buf, engine="xlrd")
     else:
-        # Local file path
         suffix = source.lower().strip()
         engine = "openpyxl" if suffix.endswith(".xlsx") else "xlrd"
         df = pd.read_excel(source, engine=engine)
 
-    # Normalize expected columns
     expected = ["License Name", "License Text", "License Family"]
     missing = [c for c in expected if c not in df.columns]
     if missing:
         raise ValueError(f"Missing columns in Excel: {missing}. Expected {expected}")
 
-    # Clean basic types and drop full-empty rows
     df["License Name"] = df["License Name"].astype(str).str.strip()
     df["License Text"] = df["License Text"].astype(str)
     df["License Family"] = df["License Family"].astype(str)
     df = df.dropna(subset=["License Name"]).reset_index(drop=True)
-
-    # Optional: drop duplicate license names (keep first)
     df = df.drop_duplicates(subset=["License Name"], keep="first").reset_index(drop=True)
     return df
 
@@ -155,40 +145,42 @@ if "data_source" not in st.session_state:
     st.session_state.data_source = ""   # Path or URL
 if "df" not in st.session_state:
     st.session_state.df = None
+if "last_query" not in st.session_state:
+    st.session_state.last_query = ""
+if "last_query_type" not in st.session_state:
+    st.session_state.last_query_type = ""
 
 # -----------------------------
-# Sidebar: Data source
+# Sidebar: Data source (hidden initially)
 # -----------------------------
-st.sidebar.header("📄 Data Source")
-st.sidebar.write("Provide a local Excel path or a GitHub **raw** URL.")
+with st.sidebar.expander("📄 Data Source", expanded=False):
+    st.write("Provide a local Excel path or a GitHub raw URL.")
+    default_raw = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
+    source_input = st.text_input(
+        "Excel path or raw URL",
+        value=st.session_state.data_source or default_raw,
+        placeholder="e.g., ./Licenses.xlsx or a GitHub raw URL",
+    )
+    load_btn = st.button("Load Excel")
 
-# Pre-fill with your repo raw URL
-default_raw = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
-source_input = st.sidebar.text_input(
-    "Excel path or raw URL",
-    value=st.session_state.data_source or default_raw,
-    placeholder="e.g., ./Licenses.xlsx or a GitHub raw URL",
-)
-load_btn = st.sidebar.button("Load Excel")
-
-if load_btn and source_input.strip():
-    try:
-        df = load_excel(source_input.strip())
-        st.session_state.df = df
-        st.session_state.data_source = source_input.strip()
-        st.sidebar.success(f"Loaded {len(df)} licenses.")
-    except Exception as e:
-        st.sidebar.error(f"Failed to load Excel: {e}")
+    if load_btn and source_input.strip():
+        try:
+            df = load_excel(source_input.strip())
+            st.session_state.df = df
+            st.session_state.data_source = source_input.strip()
+            st.success(f"Loaded {len(df)} licenses.")
+        except Exception as e:
+            st.error(f"Failed to load Excel: {e}")
 
 # If not loaded yet, try auto-load default
 if st.session_state.df is None:
     try:
-        df = load_excel(default_raw)
+        df = load_excel("https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx")
         st.session_state.df = df
-        st.session_state.data_source = default_raw
-        st.sidebar.success(f"Auto-loaded {len(df)} licenses from default raw URL.")
+        st.session_state.data_source = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
+        # silent success (sidebar expander is hidden by default)
     except Exception:
-        st.info("👋 Paste your Excel path/URL in the sidebar and click **Load Excel** to begin.")
+        st.info("👋 Open the sidebar, paste your Excel path/URL, and click **Load Excel** to begin.")
         st.stop()
 
 df = st.session_state.df
@@ -196,41 +188,31 @@ df = st.session_state.df
 # -----------------------------
 # Main UI
 # -----------------------------
-st.title("🔎 License Search UI")
+st.title("license search")
 
-# Dropdown to list all licenses
-with st.expander("📚 Browse all licenses (dropdown)"):
-    lic_names = sorted(df["License Name"].unique())
-    choice = st.selectbox("Select a license:", ["-- Select --"] + lic_names, index=0)
-    if choice and choice != "-- Select --":
-        st.session_state.selected_license = choice
-        st.session_state.view = "details"
-        st.rerun()  # ensure navigation updates immediately
-
-# Filters (optional): by family
-with st.expander("🧮 Filter by License Family (optional)"):
-    families = sorted(df["License Family"].unique())
-    fam_choice = st.multiselect("Limit searches to these families:", families, default=[])
-    if fam_choice:
-        df = df[df["License Family"].isin(fam_choice)].reset_index(drop=True)
-
-# Search inputs
+# Search inputs (License Name: selectbox with down arrow; License Text: text input)
 st.subheader("Search")
 col1, col2 = st.columns(2)
+
 with col1:
-    name_query = st.text_input("🔤 Search by License Name", placeholder="e.g., GPL, MIT, .NETZ, Zveno")
+    lic_names = ["-- select --"] + sorted(df["License Name"].unique())
+    # Label shows a down arrow, but we don't mention 'dropdown'
+    selected_name = st.selectbox("license search ▾", lic_names, index=0)
+    name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
+
 with col2:
     text_query = st.text_input("🧾 Search within License Text", placeholder="e.g., warranty, redistribution, exceptions")
     text_search_btn = st.button("License Text Search")
 
-# Actions
+# Actions on home view
 if st.session_state.view == "home":
     if name_search_btn:
         results = run_name_search(df, name_query)
         st.session_state.last_results = results
         st.session_state.last_query = name_query
         st.session_state.last_query_type = "name"
+
     if text_search_btn:
         results = run_text_search(df, text_query)
         st.session_state.last_results = results
@@ -240,12 +222,13 @@ if st.session_state.view == "home":
     # Show results (if any)
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
+        # Back button at top (only meaningful when we navigated from details)
+        st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
+
         st.markdown(f"### Results ({len(results)})")
-        # Download CSV
         csv_bytes = results[["License Name", "License Family", "Match %"]].to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download results (CSV)", data=csv_bytes, file_name="license_search_results.csv", mime="text/csv")
 
-        # Show a compact table
         st.dataframe(results[["License Name", "License Family", "Match %"]], use_container_width=True)
 
         st.divider()
@@ -258,7 +241,11 @@ if st.session_state.view == "home":
             if c4.button("View", key=f"view_{i}"):
                 st.session_state.selected_license = row["License Name"]
                 st.session_state.view = "details"
-                st.rerun()  # updated API
+                st.rerun()
+
+        # Back button at bottom
+        st.divider()
+        st.button("⬅️ Back to search results", key="back_bottom", on_click=lambda: st.rerun())
 
     elif results is not None and len(results) == 0:
         st.warning("No matches found. Try different keywords.")
@@ -270,10 +257,15 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.error("Selected license not found.")
     else:
         row = sel.iloc[0]
+
+        # Back to search at top
+        if st.button("⬅️ Back to search results", key="detail_back_top"):
+            st.session_state.view = "home"
+            st.rerun()
+
         st.markdown(f"## 📄 {row['License Name']}")
         st.caption(f"License Family: {row['License Family']}")
 
-        # Show highlighted text if the recent query exists
         recent_query = st.session_state.get("last_query", "")
         if str(recent_query).strip():
             st.markdown("**Highlighted text (matches marked):**", help="Matches are case-insensitive word hits.")
@@ -282,15 +274,13 @@ if st.session_state.view == "details" and st.session_state.selected_license:
                 unsafe_allow_html=True
             )
             st.divider()
-        st.markdown("**Full License Text:**")
-        st.text_area(
-            label="",
-            value=row["License Text"],
-            height=400,
-        )
 
-        # Back button
-        if st.button("⬅️ Back to search results"):
+        st.markdown("**Full License Text:**")
+        st.text_area(label="", value=row["License Text"], height=400)
+
+        # Back to search at bottom
+        if st.button("⬅️ Back to search results", key="detail_back_bottom"):
             st.session_state.view = "home"
-           
+            st.rerun()
+``
 
