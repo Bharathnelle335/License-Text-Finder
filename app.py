@@ -1,5 +1,4 @@
 
-# app.py
 import io
 import re
 from urllib.parse import urlparse
@@ -163,7 +162,7 @@ if "df" not in st.session_state:
 st.sidebar.header("📄 Data Source")
 st.sidebar.write("Provide a local Excel path or a GitHub **raw** URL.")
 
-# Pre-fill with the user's repo raw URL
+# Pre-fill with your repo raw URL
 default_raw = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
 source_input = st.sidebar.text_input(
     "Excel path or raw URL",
@@ -293,5 +292,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         if st.button("⬅️ Back to search results"):
             st.session_state.view = "home"
             st.experimental_rerun()
-``
 
