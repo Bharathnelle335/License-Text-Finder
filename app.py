@@ -74,6 +74,69 @@ def apply_theme():
         st.markdown(dark_css, unsafe_allow_html=True)
 
 # -----------------------------
+# Global, theme-independent polish
+# -----------------------------
+def apply_global_polish():
+    """
+    CSS that gives a professional look and enforces fixed light headers
+    for the two search controls, independent of theme.
+    """
+    global_css = """
+    <style>
+    /* Professional card style for control sections */
+    .card {
+        background: rgba(255, 255, 255, 0.65); /* light translucent; stays light */
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+        margin-bottom: 12px;
+    }
+    .card h4 {
+        margin: 0 0 10px 0;
+        font-weight: 600;
+        color: #1f2937; /* fixed dark text for header */
+        letter-spacing: 0.2px;
+    }
+
+    /* Input polish */
+    .card .stTextInput input,
+    .card .stSelectbox div[role="combobox"],
+    .card .stSelectbox [data-baseweb="select"] {
+        background: rgba(255, 255, 255, 0.8) !important;
+        border: 1px solid rgba(0,0,0,0.12) !important;
+        border-radius: 10px !important;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    /* Buttons */
+    .stButton>button {
+        border-radius: 10px !important;
+        border: 1px solid rgba(0,0,0,0.12) !important;
+        background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(245,245,245,0.85)) !important;
+        color: #111 !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+    .stButton>button:hover {
+        background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(250,250,250,0.95)) !important;
+        border-color: rgba(0,0,0,0.18) !important;
+    }
+
+    /* Dataframe polish */
+    .stDataFrame div[role="table"] {
+        border-radius: 12px;
+    }
+
+    /* Spacing utilities */
+    .spacer-4 { height: 4px; }
+    .spacer-8 { height: 8px; }
+    .spacer-12 { height: 12px; }
+    </style>
+    """
+    st.markdown(global_css, unsafe_allow_html=True)
+
+# -----------------------------
 # Utilities
 # -----------------------------
 def tokenize(text: str):
@@ -247,7 +310,8 @@ with top_cols[1]:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Apply theme after toggling
+# Apply styles
+apply_global_polish()
 apply_theme()
 
 # -----------------------------
@@ -257,21 +321,25 @@ st.subheader("Search")
 left, right = st.columns(2)
 
 with left:
-    # LEFT: Search within License Text
-    text_query = st.text_input("Search within License Text", placeholder="e.g., warranty, redistribution, exceptions")
+    # LEFT: fixed-light header + input
+    st.markdown('<div class="card"><h4>Search within License Text</h4>', unsafe_allow_html=True)
+    text_query = st.text_input("", placeholder="e.g., warranty, redistribution, exceptions", label_visibility="collapsed")
     text_search_btn = st.button("License Text Search")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with right:
-    # RIGHT: License Name selector (down arrow label, no 'dropdown' wording)
+    # RIGHT: fixed-light header + selector (no ▾ symbol)
+    st.markdown('<div class="card"><h4>License Search</h4>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
-    selected_name = st.selectbox("license search ▾", lic_names, index=0)
+    selected_name = st.selectbox("", lic_names, index=0, label_visibility="collapsed")
+    # Open immediately when selected
     if selected_name and selected_name != "-- select --":
-        # Open immediately when selected
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
-    # Explicit search by name (treat selection as query)
+    # Keep explicit search-by-name button (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
 # Home view: results list
@@ -291,7 +359,7 @@ if st.session_state.view == "home":
 
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-               # Top controls: Back + Home
+        # Top controls: Back + Home
         ctop1, ctop2 = st.columns([1, 1])
         with ctop1:
             st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
@@ -374,4 +442,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             if st.button("🏠 Home", key="detail_home_bottom"):
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
-
+                st.rerun()
