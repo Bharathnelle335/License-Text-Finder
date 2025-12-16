@@ -249,23 +249,6 @@ if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
 
 # -----------------------------
-# Helpers for navigation/buttons
-# -----------------------------
-def go_home(clear_results: bool = True):
-    """Reset the app to a clean home state."""
-    st.session_state.view = "home"
-    st.session_state.selected_license = None
-    if clear_results:
-        st.session_state.last_results = None
-        st.session_state.last_query = ""
-        st.session_state.last_query_type = ""
-    st.rerun()
-
-def clear_results_and_back():
-    """Clear search results and go to home."""
-    go_home(clear_results=True)
-
-# -----------------------------
 # Sidebar: Data source (hidden initially)
 # -----------------------------
 with st.sidebar.expander("📄 Data Source", expanded=False):
@@ -314,14 +297,10 @@ with top_cols[0]:
 with top_cols[1]:
     with st.container():
         st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
-        st.button(
-            "🌙" if not st.session_state.night_mode else "☀️",
-            key="theme_toggle",
-            on_click=lambda: (
-                st.session_state.__setitem__("night_mode", not st.session_state.night_mode),
-                st.rerun()
-            )
-        )
+        theme_clicked = st.button("🌙" if not st.session_state.night_mode else "☀️", key="theme_toggle")
+        if theme_clicked:
+            st.session_state.night_mode = not st.session_state.night_mode
+            st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 # Apply dark theme (if enabled) after drawing top bar
@@ -336,15 +315,12 @@ with left:
     # LEFT header: plain text, larger size, no background
     st.markdown('<div class="section-header">Search within License Text</div>', unsafe_allow_html=True)
     text_query = st.text_input("", placeholder="e.g., warranty, redistribution, exceptions", label_visibility="collapsed")
-    st.button(
-        "License Text Search",
-        on_click=lambda: (
-            st.session_state.__setitem__("last_results", run_text_search(df, text_query)),
-            st.session_state.__setitem__("last_query", text_query),
-            st.session_state.__setitem__("last_query_type", "text"),
-            None
-        )
-    )
+    text_search_clicked = st.button("License Text Search")
+    if text_search_clicked:
+        st.session_state.last_results = run_text_search(df, text_query)
+        st.session_state.last_query = text_query
+        st.session_state.last_query_type = "text"
+        st.rerun()  # rerun after updating state (outside callback) [1](https://docs.streamlit.io/develop/api-reference/execution-flow/st.rerun)
 
 with right:
     # RIGHT header: plain text, larger size, no background
@@ -355,17 +331,27 @@ with right:
     if selected_name and selected_name != "-- select --":
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
+        st.rerun()
     # Explicit search-by-name button (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
-    st.button(
-        "License Name Search",
-        on_click=lambda: (
-            st.session_state.__setitem__("last_results", run_name_search(df, name_query)),
-            st.session_state.__setitem__("last_query", name_query),
-            st.session_state.__setitem__("last_query_type", "name"),
-            None
-        )
-    )
+    name_search_clicked = st.button("License Name Search")
+    if name_search_clicked:
+        st.session_state.last_results = run_name_search(df, name_query)
+        st.session_state.last_query = name_query
+        st.session_state.last_query_type = "name"
+        st.rerun()
+
+# -----------------------------
+# Helper actions (used in buttons)
+# -----------------------------
+def set_home(clear_results: bool):
+    st.session_state.view = "home"
+    st.session_state.selected_license = None
+    if clear_results:
+        st.session_state.last_results = None
+        st.session_state.last_query = ""
+        st.session_state.last_query_type = ""
+    # st.rerun should be invoked here in main flow (not in a callback) [1](https://docs.streamlit.io/develop/api-reference/execution-flow/st.rerun)
 
 # -----------------------------
 # Home view: results list
@@ -375,9 +361,21 @@ if st.session_state.view == "home":
     if results is not None and len(results) > 0:
         # Top controls: Back + Clear + Home
         ctop1, ctop2, ctop3 = st.columns([1, 1, 1])
-        ctop1.button("⬅️ Back to search results", key="back_top", on_click=lambda: go_home(clear_results=False))
-        ctop2.button("🧹 Clear search results", key="clear_top", on_click=clear_results_and_back)
-        ctop3.button("🏠 Home", key="home_top", on_click=lambda: go_home(clear_results=True))
+
+        back_top_clicked = ctop1.button("⬅️ Back to search results", key="back_top")
+        if back_top_clicked:
+            set_home(clear_results=False)
+            st.rerun()
+
+        clear_top_clicked = ctop2.button("🧹 Clear search results", key="clear_top")
+        if clear_top_clicked:
+            set_home(clear_results=True)
+            st.rerun()
+
+        home_top_clicked = ctop3.button("🏠 Home", key="home_top")
+        if home_top_clicked:
+            set_home(clear_results=True)
+            st.rerun()
 
         st.markdown(f"### Results ({len(results)})")
         csv_bytes = results[["License Name", "License Family", "Match %"]].to_csv(index=False).encode("utf-8")
@@ -392,21 +390,30 @@ if st.session_state.view == "home":
             c1.write(f"**{row['License Name']}**")
             c2.write(f"Family: {row['License Family']}")
             c3.write(f"Match: {row['Match %']}%")
-            c4.button(
-                "View", key=f"view_{i}",
-                on_click=lambda ln=row["License Name"]: (
-                    st.session_state.__setitem__("selected_license", ln),
-                    st.session_state.__setitem__("view", "details"),
-                    st.rerun()
-                )
-            )
+            view_clicked = c4.button("View", key=f"view_{i}")
+            if view_clicked:
+                st.session_state.selected_license = row["License Name"]
+                st.session_state.view = "details"
+                st.rerun()
 
         # Bottom controls: Back + Clear + Home
         st.divider()
         cbtm1, cbtm2, cbtm3 = st.columns([1, 1, 1])
-        cbtm1.button("⬅️ Back to search results", key="back_bottom", on_click=lambda: go_home(clear_results=False))
-        cbtm2.button("🧹 Clear search results", key="clear_bottom", on_click=clear_results_and_back)
-        cbtm3.button("🏠 Home", key="home_bottom", on_click=lambda: go_home(clear_results=True))
+
+        back_bottom_clicked = cbtm1.button("⬅️ Back to search results", key="back_bottom")
+        if back_bottom_clicked:
+            set_home(clear_results=False)
+            st.rerun()
+
+        clear_bottom_clicked = cbtm2.button("🧹 Clear search results", key="clear_bottom")
+        if clear_bottom_clicked:
+            set_home(clear_results=True)
+            st.rerun()
+
+        home_bottom_clicked = cbtm3.button("🏠 Home", key="home_bottom")
+        if home_bottom_clicked:
+            set_home(clear_results=True)
+            st.rerun()
 
     elif results is not None and len(results) == 0:
         st.warning("No matches found. Try different keywords.")
@@ -423,9 +430,21 @@ if st.session_state.view == "details" and st.session_state.selected_license:
 
         # Top controls: Back + Clear + Home
         dtop1, dtop2, dtop3 = st.columns([1, 1, 1])
-        dtop1.button("⬅️ Back to search results", key="detail_back_top", on_click=lambda: go_home(clear_results=False))
-        dtop2.button("🧹 Clear search results", key="detail_clear_top", on_click=clear_results_and_back)
-        dtop3.button("🏠 Home", key="detail_home_top", on_click=lambda: go_home(clear_results=True))
+
+        detail_back_top_clicked = dtop1.button("⬅️ Back to search results", key="detail_back_top")
+        if detail_back_top_clicked:
+            set_home(clear_results=False)
+            st.rerun()
+
+        detail_clear_top_clicked = dtop2.button("🧹 Clear search results", key="detail_clear_top")
+        if detail_clear_top_clicked:
+            set_home(clear_results=True)
+            st.rerun()
+
+        detail_home_top_clicked = dtop3.button("🏠 Home", key="detail_home_top")
+        if detail_home_top_clicked:
+            set_home(clear_results=True)
+            st.rerun()
 
         st.markdown(f"## 📄 {row['License Name']}")
         st.caption(f"License Family: {row['License Family']}")
@@ -444,7 +463,19 @@ if st.session_state.view == "details" and st.session_state.selected_license:
 
         # Bottom controls: Back + Clear + Home
         dbtm1, dbtm2, dbtm3 = st.columns([1, 1, 1])
-        dbtm1.button("⬅️ Back to search results", key="detail_back_bottom", on_click=lambda: go_home(clear_results=False))
-        dbtm2.button("🧹 Clear search results", key="detail_clear_bottom", on_click=clear_results_and_back)
-       
+
+        detail_back_bottom_clicked = dbtm1.button("⬅️ Back to search results", key="detail_back_bottom")
+        if detail_back_bottom_clicked:
+            set_home(clear_results=False)
+            st.rerun()
+
+        detail_clear_bottom_clicked = dbtm2.button("🧹 Clear search results", key="detail_clear_bottom")
+        if detail_clear_bottom_clicked:
+            set_home(clear_results=True)
+            st.rerun()
+
+        detail_home_bottom_clicked = dbtm3.button("🏠 Home", key="detail_home_bottom")
+        if detail_home_bottom_clicked:
+            set_home(clear_results=True)
+           
 
