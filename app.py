@@ -27,34 +27,29 @@ def apply_theme():
         --accent: #3b82f6;
         --border: #30363d;
     }
-    /* App background and text */
     .stApp {
         background-color: var(--bg) !important;
         color: var(--text) !important;
     }
-    /* Headers & markdown */
     h1, h2, h3, h4, h5, h6,
     .stMarkdown, .stText, .stCaption {
         color: var(--text) !important;
     }
-    /* Panels and text areas adopt dark panel; inputs keep default theme colors */
-    .st-emotion-cache-1r6slb0, /* containers */
-    .st-emotion-cache-1jicfl2, /* expanders */
-    .st-emotion-cache-1v0mbdj, /* text areas */
+    .st-emotion-cache-1r6slb0,
+    .st-emotion-cache-1jicfl2,
+    .st-emotion-cache-1v0mbdj,
     .stTextArea textarea,
     .stDataFrame {
         background-color: var(--panel) !important;
         color: var(--text) !important;
         border-color: var(--border) !important;
     }
-    /* High-contrast highlight for dark mode */
     mark {
-        background: #ffd54f !important; /* amber */
-        color: #000 !important;          /* black text for max contrast */
+        background: #ffd54f !important; /* high-contrast amber */
+        color: #000 !important;
         padding: 0 2px;
         border-radius: 2px;
     }
-    /* Icon-only toggle button styling (compact) */
     .theme-toggle button {
         width: 42px;
         height: 42px;
@@ -66,50 +61,35 @@ def apply_theme():
     }
     </style>
     """
-    # Light mode is the default Streamlit theme; we only inject CSS for dark mode.
     if st.session_state.get("night_mode", False):
         st.markdown(dark_css, unsafe_allow_html=True)
 
 # -----------------------------
-# Global, theme-independent polish
+# Minimal global polish (no button overrides)
 # -----------------------------
 def apply_global_polish():
     """
-    Minimal CSS for a professional look:
-    - Fixed-light headers for the two search cards (do not change with theme).
-    - NO custom button background here (buttons use theme defaults).
+    Minimal CSS for a professional look.
+    Note: No custom button styling so buttons follow the active theme.
     """
     global_css = """
     <style>
-    /* Professional card style for control sections */
-    .card {
-        background: rgba(255, 255, 255, 0.65); /* light translucent; stays light */
-        backdrop-filter: blur(4px);
-        border: 1px solid rgba(0,0,0,0.08);
-        border-radius: 12px;
-        padding: 14px 16px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.06);
-        margin-bottom: 12px;
+    /* Center title */
+    .app-title {
+        text-align: center;
+        margin-top: 4px;
+        margin-bottom: 8px;
     }
-    .card h4 {
-        margin: 0 0 10px 0;
+    /* Header labels for left/right (no backgrounds) */
+    .section-header {
+        font-size: 1.15rem;          /* slightly larger */
         font-weight: 600;
-        color: #1f2937; /* fixed dark text for header */
         letter-spacing: 0.2px;
+        margin-bottom: 6px;
     }
-
-    /* Inputs (kept subtle; do not override theme for buttons) */
-    .card .stTextInput input,
-    .card .stSelectbox div[role="combobox"],
-    .card .stSelectbox [data-baseweb="select"] {
-        background: rgba(255, 255, 255, 0.8) !important;
-        border: 1px solid rgba(0,0,0,0.12) !important;
-        border-radius: 10px !important;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-    }
-
-    /* Remove any previous custom button overrides:
-       Buttons should inherit Streamlit's theme (light/dark) */
+    /* Spacers */
+    .spacer-8 { height: 8px; }
+    .spacer-12 { height: 12px; }
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
@@ -274,11 +254,14 @@ if st.session_state.df is None:
 df = st.session_state.df
 
 # -----------------------------
-# Top bar: Title + Night mode (icon-only)
+# Top bar: Centered Title + Night mode (icon-only)
 # -----------------------------
+# Center title via custom class.
+apply_global_polish()
+
 top_cols = st.columns([6, 1])
 with top_cols[0]:
-    st.title("License Search")
+    st.markdown('<h1 class="app-title">License Search</h1>', unsafe_allow_html=True)
 with top_cols[1]:
     with st.container():
         st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
@@ -287,34 +270,34 @@ with top_cols[1]:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Apply styles
-apply_global_polish()
+# Apply dark theme (if enabled) after drawing top bar
 apply_theme()
 
 # -----------------------------
 # Search UI (left: text search, right: license selector)
 # -----------------------------
-st.subheader("Search")
+# NOTE: Removed the "Search" subheader per request.
+
 left, right = st.columns(2)
 
 with left:
-    # LEFT: fixed-light header + input
-    st.markdown('<div class="card"><h4>Search within License Text</h4>', unsafe_allow_html=True)
+    # LEFT header: plain text, larger size, no background
+    st.markdown('<div class="section-header">Search within License Text</div>', unsafe_allow_html=True)
     text_query = st.text_input("", placeholder="e.g., warranty, redistribution, exceptions", label_visibility="collapsed")
     text_search_btn = st.button("License Text Search")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with right:
-    # RIGHT: fixed-light header + selector (no ▾ symbol)
-    st.markdown('<div class="card"><h4>License Search</h4>', unsafe_allow_html=True)
+    # RIGHT header: plain text, larger size, no background
+    st.markdown('<div class="section-header">License Search</div>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
     selected_name = st.selectbox("", lic_names, index=0, label_visibility="collapsed")
+    # Open immediately when selected
     if selected_name and selected_name != "-- select --":
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
+    # Keep explicit search-by-name button (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
 # Home view: results list
@@ -334,7 +317,7 @@ if st.session_state.view == "home":
 
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back + Home (use theme defaults)
+        # Top controls: Back + Home (theme defaults)
         ctop1, ctop2 = st.columns([1, 1])
         with ctop1:
             st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
