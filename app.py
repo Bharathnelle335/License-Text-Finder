@@ -1,7 +1,7 @@
 
 import io
 import re
-import time
+import json
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -69,25 +69,57 @@ def apply_theme():
 # Minimal global polish (no button overrides)
 # -----------------------------
 def apply_global_polish():
-    """
-    Minimal CSS for a professional look.
-    Note: No custom button styling so buttons follow the active theme.
-    """
+    """Minimal CSS for section headers."""
     global_css = """
     <style>
-    /* Headers for left/right (no backgrounds) */
+    /* Left/right headers (no backgrounds) */
     .section-header {
         font-size: 1.15rem;          /* slightly larger */
         font-weight: 600;
         letter-spacing: 0.2px;
         margin-bottom: 6px;
     }
-    /* Spacers */
-    .spacer-8 { height: 8px; }
-    .spacer-12 { height: 12px; }
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
+
+# -----------------------------
+# Rotating brief (no page reload)
+# -----------------------------
+def render_rotating_brief():
+    """
+    Render a short line under the title that changes every 5 seconds
+    using JavaScript inside st.html (no page reload).
+    """
+    messages = [
+        "Find licenses by name or text and view full, highlighted content.",
+        "Quickly open any license and navigate back easily with top/bottom controls.",
+        "Toggle night mode for comfortable reading."
+    ]
+    # Color that adapts to current theme state
+    color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
+    # Build the HTML+JS
+    html = f"""
+    <div id="brief" style="font-size:0.95rem;color:{color};opacity:0.9;">
+      <span id="briefText"></span>
+    </div>
+    <script>
+      const msgs = {json.dumps(messages)};
+      let i = 0;
+      function update() {{
+        const el = document.getElementById('briefText');
+        if (el) {{
+          el.textContent = msgs[i % msgs.length];
+        }}
+      }}
+      update();                // initial
+      setInterval(() => {{     // rotate every 5s
+        i += 1;
+        update();
+      }}, 5000);
+    </script>
+    """
+    st.html(html, height=40, unsafe_allow_javascript=True)
 
 # -----------------------------
 # Utilities
@@ -257,21 +289,8 @@ top_cols = st.columns([6, 1])
 with top_cols[0]:
     # Left-aligned title
     st.title("License Search")
-
-    # Rotating brief just under the title
-    briefs = [
-        "Find licenses by name or text and view full, highlighted content.",
-        "Quickly filter results and navigate back with top/bottom controls.",
-        "Toggle night mode for comfortable reading in any environment."
-    ]
-    idx = int(time.time() // 5) % len(briefs)
-    st.caption(briefs[idx])
-
-    # Auto-rotate every 5 seconds (reload page)
-    st.html(
-        "<script>setTimeout(() => window.parent.location.reload(), 5000);</script>",
-        unsafe_allow_javascript=True
-    )
+    # Rotating brief just under the title (no page reload)
+    render_rotating_brief()
 
 with top_cols[1]:
     with st.container():
@@ -304,7 +323,7 @@ with right:
     if selected_name and selected_name != "-- select --":
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
-    # Keep explicit search-by-name button (treat selection as query)
+    # Explicit search-by-name button (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
 
