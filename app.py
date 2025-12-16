@@ -10,7 +10,7 @@ import streamlit as st
 # -----------------------------
 # App Config
 # -----------------------------
-st.set_page_config(page_title="license search", layout="wide")
+st.set_page_config(page_title="License Search", layout="wide")
 
 # -----------------------------
 # Night mode style helper
@@ -32,16 +32,13 @@ def apply_theme():
         background-color: var(--bg) !important;
         color: var(--text) !important;
     }
-    /* Headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: var(--text) !important;
-    }
-    /* Markdown text */
+    /* Headers & markdown */
+    h1, h2, h3, h4, h5, h6,
     .stMarkdown, .stText, .stCaption {
         color: var(--text) !important;
     }
-    /* Containers, expanders, code blocks */
-    .st-emotion-cache-1r6slb0, /* block containers */
+    /* Panels, inputs, buttons */
+    .st-emotion-cache-1r6slb0, /* containers */
     .st-emotion-cache-1jicfl2, /* expanders */
     .st-emotion-cache-1v0mbdj, /* text areas */
     .stTextArea textarea,
@@ -50,16 +47,25 @@ def apply_theme():
         color: var(--text) !important;
         border-color: var(--border) !important;
     }
-    /* Inputs */
     .stTextInput input, .stSelectbox, .stSelectbox [data-baseweb="select"], .stSelectbox div {
         color: var(--text) !important;
     }
-    /* Highlight marks */
+    /* High-contrast highlight for dark mode */
     mark {
-        background: #3b82f6;
-        color: white;
+        background: #ffd54f !important; /* amber */
+        color: #000 !important;          /* black text for max contrast */
         padding: 0 2px;
         border-radius: 2px;
+    }
+    /* Icon-only toggle button styling (compact) */
+    .theme-toggle button {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        font-size: 20px;
+        line-height: 20px;
+        padding: 0;
+        border: 1px solid var(--border) !important;
     }
     </style>
     """
@@ -227,22 +233,25 @@ if st.session_state.df is None:
 df = st.session_state.df
 
 # -----------------------------
-# Top bar: Title + Night mode
+# Top bar: Title + Night mode (icon-only)
 # -----------------------------
 top_cols = st.columns([6, 1])
 with top_cols[0]:
-    st.title("license search")
+    st.title("License Search")
 with top_cols[1]:
-    # Night mode toggle button
-    if st.button("🌙 Night mode" if not st.session_state.night_mode else "☀️ Light mode"):
-        st.session_state.night_mode = not st.session_state.night_mode
-        st.rerun()
+    # Wrap the icon-only toggle in a container to apply compact CSS
+    with st.container():
+        st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
+        if st.button("🌙" if not st.session_state.night_mode else "☀️", key="theme_toggle"):
+            st.session_state.night_mode = not st.session_state.night_mode
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # Apply theme after toggling
 apply_theme()
 
 # -----------------------------
-# Search UI (SWAPPED: text search on LEFT, license selector on RIGHT)
+# Search UI (left: text search, right: license selector)
 # -----------------------------
 st.subheader("Search")
 left, right = st.columns(2)
@@ -260,7 +269,7 @@ with right:
         # Open immediately when selected
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
-    # Keep the explicit search button (treat the selected item as query)
+    # Explicit search by name (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
 
@@ -282,7 +291,7 @@ if st.session_state.view == "home":
 
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back + Home
+               # Top controls: Back + Home
         ctop1, ctop2 = st.columns([1, 1])
         with ctop1:
             st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
@@ -365,4 +374,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             if st.button("🏠 Home", key="detail_home_bottom"):
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
-                st.rerun()
+
