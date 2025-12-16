@@ -410,5 +410,3 @@ if st.session_state.view == "details" and st.session_state.selected_license:
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
                 st.rerun()
-``
-
