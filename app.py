@@ -37,18 +37,15 @@ def apply_theme():
     .stMarkdown, .stText, .stCaption {
         color: var(--text) !important;
     }
-    /* Panels, inputs, buttons */
+    /* Panels and text areas adopt dark panel; inputs keep default theme colors */
     .st-emotion-cache-1r6slb0, /* containers */
     .st-emotion-cache-1jicfl2, /* expanders */
     .st-emotion-cache-1v0mbdj, /* text areas */
     .stTextArea textarea,
-    .stDataFrame, .stDownloadButton, .stButton>button {
+    .stDataFrame {
         background-color: var(--panel) !important;
         color: var(--text) !important;
         border-color: var(--border) !important;
-    }
-    .stTextInput input, .stSelectbox, .stSelectbox [data-baseweb="select"], .stSelectbox div {
-        color: var(--text) !important;
     }
     /* High-contrast highlight for dark mode */
     mark {
@@ -78,8 +75,9 @@ def apply_theme():
 # -----------------------------
 def apply_global_polish():
     """
-    CSS that gives a professional look and enforces fixed light headers
-    for the two search controls, independent of theme.
+    Minimal CSS for a professional look:
+    - Fixed-light headers for the two search cards (do not change with theme).
+    - NO custom button background here (buttons use theme defaults).
     """
     global_css = """
     <style>
@@ -100,7 +98,7 @@ def apply_global_polish():
         letter-spacing: 0.2px;
     }
 
-    /* Input polish */
+    /* Inputs (kept subtle; do not override theme for buttons) */
     .card .stTextInput input,
     .card .stSelectbox div[role="combobox"],
     .card .stSelectbox [data-baseweb="select"] {
@@ -110,28 +108,8 @@ def apply_global_polish():
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
     }
 
-    /* Buttons */
-    .stButton>button {
-        border-radius: 10px !important;
-        border: 1px solid rgba(0,0,0,0.12) !important;
-        background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(245,245,245,0.85)) !important;
-        color: #111 !important;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-    }
-    .stButton>button:hover {
-        background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(250,250,250,0.95)) !important;
-        border-color: rgba(0,0,0,0.18) !important;
-    }
-
-    /* Dataframe polish */
-    .stDataFrame div[role="table"] {
-        border-radius: 12px;
-    }
-
-    /* Spacing utilities */
-    .spacer-4 { height: 4px; }
-    .spacer-8 { height: 8px; }
-    .spacer-12 { height: 12px; }
+    /* Remove any previous custom button overrides:
+       Buttons should inherit Streamlit's theme (light/dark) */
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
@@ -302,7 +280,6 @@ top_cols = st.columns([6, 1])
 with top_cols[0]:
     st.title("License Search")
 with top_cols[1]:
-    # Wrap the icon-only toggle in a container to apply compact CSS
     with st.container():
         st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
         if st.button("🌙" if not st.session_state.night_mode else "☀️", key="theme_toggle"):
@@ -332,11 +309,9 @@ with right:
     st.markdown('<div class="card"><h4>License Search</h4>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
     selected_name = st.selectbox("", lic_names, index=0, label_visibility="collapsed")
-    # Open immediately when selected
     if selected_name and selected_name != "-- select --":
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
-    # Keep explicit search-by-name button (treat selection as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -359,7 +334,7 @@ if st.session_state.view == "home":
 
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back + Home
+        # Top controls: Back + Home (use theme defaults)
         ctop1, ctop2 = st.columns([1, 1])
         with ctop1:
             st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
@@ -384,7 +359,7 @@ if st.session_state.view == "home":
                 st.session_state.view = "details"
                 st.rerun()
 
-        # Bottom controls: Back + Home
+        # Bottom controls: Back + Home (theme defaults)
         st.divider()
         cbtm1, cbtm2 = st.columns([1, 1])
         with cbtm1:
@@ -405,7 +380,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
     else:
         row = sel.iloc[0]
 
-        # Top controls: Back + Home
+        # Top controls: Back + Home (theme defaults)
         dtop1, dtop2 = st.columns([1, 1])
         with dtop1:
             if st.button("⬅️ Back to search results", key="detail_back_top"):
@@ -432,7 +407,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.markdown("**Full License Text:**")
         st.text_area(label="", value=row["License Text"], height=400)
 
-        # Bottom controls: Back + Home
+        # Bottom controls: Back + Home (theme defaults)
         dbtm1, dbtm2 = st.columns([1, 1])
         with dbtm1:
             if st.button("⬅️ Back to search results", key="detail_back_bottom"):
@@ -442,4 +417,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             if st.button("🏠 Home", key="detail_home_bottom"):
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
-                st.rerun()
+               
