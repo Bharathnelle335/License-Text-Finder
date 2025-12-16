@@ -84,7 +84,7 @@ def apply_global_polish():
     st.markdown(global_css, unsafe_allow_html=True)
 
 # -----------------------------
-# Rotating brief (no page reload)
+# Rotating brief (without page reload)
 # -----------------------------
 def render_rotating_brief():
     """
@@ -96,9 +96,8 @@ def render_rotating_brief():
         "Quickly open any license and navigate back easily with top/bottom controls.",
         "Toggle night mode for comfortable reading."
     ]
-    # Color that adapts to current theme state
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
-    # Build the HTML+JS
+
     html = f"""
     <div id="brief" style="font-size:0.95rem;color:{color};opacity:0.9;">
       <span id="briefText"></span>
@@ -119,7 +118,8 @@ def render_rotating_brief():
       }}, 5000);
     </script>
     """
-    st.html(html, height=40, unsafe_allow_javascript=True)
+    # IMPORTANT: st.html supports unsafe_allow_javascript but not 'height'
+    st.html(html, unsafe_allow_javascript=True)
 
 # -----------------------------
 # Utilities
@@ -429,3 +429,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
                 st.rerun()
+            
