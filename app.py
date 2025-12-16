@@ -1,6 +1,7 @@
 
 import io
 import re
+import time
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -74,13 +75,7 @@ def apply_global_polish():
     """
     global_css = """
     <style>
-    /* Center title */
-    .app-title {
-        text-align: center;
-        margin-top: 4px;
-        margin-bottom: 8px;
-    }
-    /* Header labels for left/right (no backgrounds) */
+    /* Headers for left/right (no backgrounds) */
     .section-header {
         font-size: 1.15rem;          /* slightly larger */
         font-weight: 600;
@@ -254,14 +249,30 @@ if st.session_state.df is None:
 df = st.session_state.df
 
 # -----------------------------
-# Top bar: Centered Title + Night mode (icon-only)
+# Top bar: Title (left) + Night mode (icon-only) + rotating brief
 # -----------------------------
-# Center title via custom class.
 apply_global_polish()
 
 top_cols = st.columns([6, 1])
 with top_cols[0]:
-    st.markdown('<h1 class="app-title">License Search</h1>', unsafe_allow_html=True)
+    # Left-aligned title
+    st.title("License Search")
+
+    # Rotating brief just under the title
+    briefs = [
+        "Find licenses by name or text and view full, highlighted content.",
+        "Quickly filter results and navigate back with top/bottom controls.",
+        "Toggle night mode for comfortable reading in any environment."
+    ]
+    idx = int(time.time() // 5) % len(briefs)
+    st.caption(briefs[idx])
+
+    # Auto-rotate every 5 seconds (reload page)
+    st.html(
+        "<script>setTimeout(() => window.parent.location.reload(), 5000);</script>",
+        unsafe_allow_javascript=True
+    )
+
 with top_cols[1]:
     with st.container():
         st.markdown('<div class="theme-toggle">', unsafe_allow_html=True)
@@ -276,8 +287,6 @@ apply_theme()
 # -----------------------------
 # Search UI (left: text search, right: license selector)
 # -----------------------------
-# NOTE: Removed the "Search" subheader per request.
-
 left, right = st.columns(2)
 
 with left:
@@ -400,4 +409,6 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             if st.button("🏠 Home", key="detail_home_bottom"):
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
-               
+                st.rerun()
+``
+
