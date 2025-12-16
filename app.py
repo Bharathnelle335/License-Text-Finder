@@ -13,18 +13,69 @@ import streamlit as st
 st.set_page_config(page_title="license search", layout="wide")
 
 # -----------------------------
+# Night mode style helper
+# -----------------------------
+def apply_theme():
+    """Apply light/dark CSS based on st.session_state.night_mode."""
+    dark_css = """
+    <style>
+    :root {
+        --bg: #0e1117;
+        --panel: #161a22;
+        --text: #e6edf3;
+        --muted: #9aa4b2;
+        --accent: #3b82f6;
+        --border: #30363d;
+    }
+    /* App background and text */
+    .stApp {
+        background-color: var(--bg) !important;
+        color: var(--text) !important;
+    }
+    /* Headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text) !important;
+    }
+    /* Markdown text */
+    .stMarkdown, .stText, .stCaption {
+        color: var(--text) !important;
+    }
+    /* Containers, expanders, code blocks */
+    .st-emotion-cache-1r6slb0, /* block containers */
+    .st-emotion-cache-1jicfl2, /* expanders */
+    .st-emotion-cache-1v0mbdj, /* text areas */
+    .stTextArea textarea,
+    .stDataFrame, .stDownloadButton, .stButton>button {
+        background-color: var(--panel) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+    }
+    /* Inputs */
+    .stTextInput input, .stSelectbox, .stSelectbox [data-baseweb="select"], .stSelectbox div {
+        color: var(--text) !important;
+    }
+    /* Highlight marks */
+    mark {
+        background: #3b82f6;
+        color: white;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+    </style>
+    """
+    # Light mode is the default Streamlit theme; we only inject CSS for dark mode.
+    if st.session_state.get("night_mode", False):
+        st.markdown(dark_css, unsafe_allow_html=True)
+
+# -----------------------------
 # Utilities
 # -----------------------------
 def tokenize(text: str):
     """Split text into lowercase word tokens."""
     return re.findall(r"\w+", (text or "").lower())
 
-
 def word_match_score(query: str, target: str) -> float:
-    """
-    Simple percentage match:
-    (# unique query words found in target) / (total unique query words) * 100
-    """
+    """Simple percentage match of unique query words found in target."""
     q_tokens = set(tokenize(query))
     t_tokens = set(tokenize(target))
     if not q_tokens:
@@ -32,28 +83,23 @@ def word_match_score(query: str, target: str) -> float:
     found = sum(1 for w in q_tokens if w in t_tokens)
     return round((found / len(q_tokens)) * 100.0, 2)
 
-
 def contains_any(query: str, target: str) -> bool:
     """Return True if any query word is found in target text."""
     q_tokens = set(tokenize(query))
     t_tokens = set(tokenize(target))
     return any(w in t_tokens for w in q_tokens)
 
-
 def highlight_text(text: str, query: str) -> str:
     """Highlight query words in text using <mark>…</mark> (case-insensitive)."""
     if not text or not query:
         return text or ""
-
     def repl(match):
         return f"<mark>{match.group(0)}</mark>"
-
     highlighted = text
     for word in sorted(set(tokenize(query)), key=len, reverse=True):
         pattern = re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE)
         highlighted = pattern.sub(repl, highlighted)
     return highlighted
-
 
 def to_raw_url(maybe_github_url: str) -> str:
     """Convert GitHub blob URL to raw.githubusercontent URL if needed."""
@@ -66,7 +112,6 @@ def to_raw_url(maybe_github_url: str) -> str:
         raw = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{path}"
         return raw
     return maybe_github_url
-
 
 @st.cache_data(show_spinner=False)
 def load_excel(source: str) -> pd.DataFrame:
@@ -87,7 +132,6 @@ def load_excel(source: str) -> pd.DataFrame:
         with urlopen(source) as resp:
             data = resp.read()
         buf = io.BytesIO(data)
-        # Try .xlsx first, fallback to .xls
         try:
             df = pd.read_excel(buf, engine="openpyxl")
         except Exception:
@@ -110,7 +154,6 @@ def load_excel(source: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["License Name"], keep="first").reset_index(drop=True)
     return df
 
-
 def run_name_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     if not query.strip():
         return pd.DataFrame()
@@ -120,7 +163,6 @@ def run_name_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
     return subset
 
-
 def run_text_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     if not query.strip():
         return pd.DataFrame()
@@ -129,7 +171,6 @@ def run_text_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
     subset["Match %"] = subset["License Text"].apply(lambda x: word_match_score(query, x))
     subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
     return subset
-
 
 # -----------------------------
 # Session state keys
@@ -141,13 +182,15 @@ if "last_results" not in st.session_state:
 if "selected_license" not in st.session_state:
     st.session_state.selected_license = None
 if "data_source" not in st.session_state:
-    st.session_state.data_source = ""   # Path or URL
+    st.session_state.data_source = ""
 if "df" not in st.session_state:
     st.session_state.df = None
 if "last_query" not in st.session_state:
     st.session_state.last_query = ""
 if "last_query_type" not in st.session_state:
     st.session_state.last_query_type = ""
+if "night_mode" not in st.session_state:
+    st.session_state.night_mode = False
 
 # -----------------------------
 # Sidebar: Data source (hidden initially)
@@ -177,7 +220,6 @@ if st.session_state.df is None:
         df = load_excel("https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx")
         st.session_state.df = df
         st.session_state.data_source = "https://raw.githubusercontent.com/Bharathnelle335/License-Text-Finder/main/Licenses.xlsx"
-        # silent success
     except Exception:
         st.info("👋 Open the sidebar, paste your Excel path/URL, and click **Load Excel** to begin.")
         st.stop()
@@ -185,33 +227,46 @@ if st.session_state.df is None:
 df = st.session_state.df
 
 # -----------------------------
-# Main UI
+# Top bar: Title + Night mode
 # -----------------------------
-st.title("license search")
+top_cols = st.columns([6, 1])
+with top_cols[0]:
+    st.title("license search")
+with top_cols[1]:
+    # Night mode toggle button
+    if st.button("🌙 Night mode" if not st.session_state.night_mode else "☀️ Light mode"):
+        st.session_state.night_mode = not st.session_state.night_mode
+        st.rerun()
 
-# Search inputs (License Name: selectbox with down arrow; License Text: text input)
+# Apply theme after toggling
+apply_theme()
+
+# -----------------------------
+# Search UI (SWAPPED: text search on LEFT, license selector on RIGHT)
+# -----------------------------
 st.subheader("Search")
-col1, col2 = st.columns(2)
+left, right = st.columns(2)
 
-with col1:
+with left:
+    # LEFT: Search within License Text
+    text_query = st.text_input("Search within License Text", placeholder="e.g., warranty, redistribution, exceptions")
+    text_search_btn = st.button("License Text Search")
+
+with right:
+    # RIGHT: License Name selector (down arrow label, no 'dropdown' wording)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
-    # Label shows a down arrow, but we don't mention 'dropdown'
     selected_name = st.selectbox("license search ▾", lic_names, index=0)
-    # If user chooses a license here, open it directly
     if selected_name and selected_name != "-- select --":
+        # Open immediately when selected
         st.session_state.selected_license = selected_name
         st.session_state.view = "details"
-
-    # Also keep explicit search-by-name button (optional)
-    # If user presses the button, we treat the selected item as the query.
+    # Keep the explicit search button (treat the selected item as query)
     name_query = "" if selected_name == "-- select --" else selected_name
     name_search_btn = st.button("License Name Search")
 
-with col2:
-    text_query = st.text_input("🧾 Search within License Text", placeholder="e.g., warranty, redistribution, exceptions")
-    text_search_btn = st.button("License Text Search")
-
-# Actions on home view
+# -----------------------------
+# Home view: results list
+# -----------------------------
 if st.session_state.view == "home":
     if name_search_btn:
         results = run_name_search(df, name_query)
@@ -225,10 +280,9 @@ if st.session_state.view == "home":
         st.session_state.last_query = text_query
         st.session_state.last_query_type = "text"
 
-    # Show results (if any)
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back/Home side-by-side
+        # Top controls: Back + Home
         ctop1, ctop2 = st.columns([1, 1])
         with ctop1:
             st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
@@ -253,7 +307,7 @@ if st.session_state.view == "home":
                 st.session_state.view = "details"
                 st.rerun()
 
-        # Bottom controls: Back/Home side-by-side
+        # Bottom controls: Back + Home
         st.divider()
         cbtm1, cbtm2 = st.columns([1, 1])
         with cbtm1:
@@ -264,7 +318,9 @@ if st.session_state.view == "home":
     elif results is not None and len(results) == 0:
         st.warning("No matches found. Try different keywords.")
 
-# Details view
+# -----------------------------
+# Details view: selected license
+# -----------------------------
 if st.session_state.view == "details" and st.session_state.selected_license:
     sel = st.session_state.df[st.session_state.df["License Name"] == st.session_state.selected_license].head(1)
     if sel.empty:
@@ -272,7 +328,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
     else:
         row = sel.iloc[0]
 
-        # Top controls: Back/Home
+        # Top controls: Back + Home
         dtop1, dtop2 = st.columns([1, 1])
         with dtop1:
             if st.button("⬅️ Back to search results", key="detail_back_top"):
@@ -280,7 +336,6 @@ if st.session_state.view == "details" and st.session_state.selected_license:
                 st.rerun()
         with dtop2:
             if st.button("🏠 Home", key="detail_home_top"):
-                # Home = clear selection and go to home
                 st.session_state.selected_license = None
                 st.session_state.view = "home"
                 st.rerun()
@@ -300,7 +355,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.markdown("**Full License Text:**")
         st.text_area(label="", value=row["License Text"], height=400)
 
-        # Bottom controls: Back/Home
+        # Bottom controls: Back + Home
         dbtm1, dbtm2 = st.columns([1, 1])
         with dbtm1:
             if st.button("⬅️ Back to search results", key="detail_back_bottom"):
