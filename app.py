@@ -79,6 +79,8 @@ def apply_global_polish():
         letter-spacing: 0.2px;
         margin-bottom: 6px;
     }
+    /* Small gap utility */
+    .gap-6 { margin-top: 6px; }
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
@@ -247,6 +249,23 @@ if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
 
 # -----------------------------
+# Helpers for navigation/buttons
+# -----------------------------
+def go_home(clear_results: bool = True):
+    """Reset the app to a clean home state."""
+    st.session_state.view = "home"
+    st.session_state.selected_license = None
+    if clear_results:
+        st.session_state.last_results = None
+        st.session_state.last_query = ""
+        st.session_state.last_query_type = ""
+    st.rerun()
+
+def clear_results_and_back():
+    """Clear search results and go to home."""
+    go_home(clear_results=True)
+
+# -----------------------------
 # Sidebar: Data source (hidden initially)
 # -----------------------------
 with st.sidebar.expander("📄 Data Source", expanded=False):
@@ -345,12 +364,14 @@ if st.session_state.view == "home":
 
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back + Home (theme defaults)
-        ctop1, ctop2 = st.columns([1, 1])
+        # Top controls: Back + Clear + Home
+        ctop1, ctop2, ctop3 = st.columns([1, 1, 1])
         with ctop1:
-            st.button("⬅️ Back to search results", key="back_top", on_click=lambda: st.rerun())
+            st.button("⬅️ Back to search results", key="back_top", on_click=lambda: go_home(clear_results=False))
         with ctop2:
-            st.button("🏠 Home", key="home_top", on_click=lambda: st.rerun())
+            st.button("🧹 Clear search results", key="clear_top", on_click=clear_results_and_back)
+        with ctop3:
+            st.button("🏠 Home", key="home_top", on_click=lambda: go_home(clear_results=True))
 
         st.markdown(f"### Results ({len(results)})")
         csv_bytes = results[["License Name", "License Family", "Match %"]].to_csv(index=False).encode("utf-8")
@@ -370,13 +391,15 @@ if st.session_state.view == "home":
                 st.session_state.view = "details"
                 st.rerun()
 
-        # Bottom controls: Back + Home (theme defaults)
+        # Bottom controls: Back + Clear + Home
         st.divider()
-        cbtm1, cbtm2 = st.columns([1, 1])
+        cbtm1, cbtm2, cbtm3 = st.columns([1, 1, 1])
         with cbtm1:
-            st.button("⬅️ Back to search results", key="back_bottom", on_click=lambda: st.rerun())
+            st.button("⬅️ Back to search results", key="back_bottom", on_click=lambda: go_home(clear_results=False))
         with cbtm2:
-            st.button("🏠 Home", key="home_bottom", on_click=lambda: st.rerun())
+            st.button("🧹 Clear search results", key="clear_bottom", on_click=clear_results_and_back)
+        with cbtm3:
+            st.button("🏠 Home", key="home_bottom", on_click=lambda: go_home(clear_results=True))
 
     elif results is not None and len(results) == 0:
         st.warning("No matches found. Try different keywords.")
@@ -391,17 +414,17 @@ if st.session_state.view == "details" and st.session_state.selected_license:
     else:
         row = sel.iloc[0]
 
-        # Top controls: Back + Home (theme defaults)
-        dtop1, dtop2 = st.columns([1, 1])
+        # Top controls: Back + Clear + Home
+        dtop1, dtop2, dtop3 = st.columns([1, 1, 1])
         with dtop1:
             if st.button("⬅️ Back to search results", key="detail_back_top"):
-                st.session_state.view = "home"
-                st.rerun()
+                go_home(clear_results=False)
         with dtop2:
+            if st.button("🧹 Clear search results", key="detail_clear_top"):
+                clear_results_and_back()
+        with dtop3:
             if st.button("🏠 Home", key="detail_home_top"):
-                st.session_state.selected_license = None
-                st.session_state.view = "home"
-                st.rerun()
+                go_home(clear_results=True)
 
         st.markdown(f"## 📄 {row['License Name']}")
         st.caption(f"License Family: {row['License Family']}")
@@ -410,7 +433,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         if str(recent_query).strip():
             st.markdown("**Highlighted text (matches marked):**", help="Matches are case-insensitive word hits.")
             st.markdown(
-                highlight_text(row["License Text"], str(recent_query)),
+                               highlight_text(row["License Text"], str(recent_query)),
                 unsafe_allow_html=True
             )
             st.divider()
@@ -418,15 +441,14 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.markdown("**Full License Text:**")
         st.text_area(label="", value=row["License Text"], height=400)
 
-        # Bottom controls: Back + Home (theme defaults)
-        dbtm1, dbtm2 = st.columns([1, 1])
+        # Bottom controls: Back + Clear + Home
+        dbtm1, dbtm2, dbtm3 = st.columns([1, 1, 1])
         with dbtm1:
             if st.button("⬅️ Back to search results", key="detail_back_bottom"):
-                st.session_state.view = "home"
-                st.rerun()
+                go_home(clear_results=False)
         with dbtm2:
+            if st.button("🧹 Clear search results", key="detail_clear_bottom"):
+                clear_results_and_back()
+        with dbtm3:
             if st.button("🏠 Home", key="detail_home_bottom"):
-                st.session_state.selected_license = None
-                st.session_state.view = "home"
-                st.rerun()
-            
+
