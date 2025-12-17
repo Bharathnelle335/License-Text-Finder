@@ -28,36 +28,19 @@ def apply_theme():
         --accent: #3b82f6;
         --border: #30363d;
     }
-    .stApp {
-        background-color: var(--bg) !important;
-        color: var(--text) !important;
-    }
-    h1, h2, h3, h4, h5, h6,
-    .stMarkdown, .stText, .stCaption {
-        color: var(--text) !important;
-    }
-    .st-emotion-cache-1r6slb0,
-    .st-emotion-cache-1jicfl2,
-    .st-emotion-cache-1v0mbdj,
-    .stTextArea textarea,
-    .stDataFrame {
-        background-color: var(--panel) !important;
-        color: var(--text) !important;
-        border-color: var(--border) !important;
+    .stApp { background-color: var(--bg) !important; color: var(--text) !important; }
+    h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stCaption { color: var(--text) !important; }
+    .st-emotion-cache-1r6slb0, .st-emotion-cache-1jicfl2, .st-emotion-cache-1v0mbdj,
+    .stTextArea textarea, .stDataFrame {
+        background-color: var(--panel) !important; color: var(--text) !important; border-color: var(--border) !important;
     }
     mark {
         background: #ffd54f !important; /* high-contrast amber */
         color: #000 !important;
-        padding: 0 2px;
-        border-radius: 2px;
+        padding: 0 2px; border-radius: 2px;
     }
     .theme-toggle button {
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        font-size: 20px;
-        line-height: 20px;
-        padding: 0;
+        width: 42px; height: 42px; border-radius: 50%; font-size: 20px; line-height: 20px; padding: 0;
         border: 1px solid var(--border) !important;
     }
     </style>
@@ -72,15 +55,9 @@ def apply_global_polish():
     """Minimal CSS for section headers."""
     global_css = """
     <style>
-    /* Left/right headers (no backgrounds) */
     .section-header {
-        font-size: 1.15rem;          /* slightly larger */
-        font-weight: 600;
-        letter-spacing: 0.2px;
-        margin-bottom: 6px;
+        font-size: 1.15rem; font-weight: 600; letter-spacing: 0.2px; margin-bottom: 6px;
     }
-    /* Small gap utility */
-    .gap-6 { margin-top: 6px; }
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
@@ -89,17 +66,13 @@ def apply_global_polish():
 # Rotating brief (without page reload)
 # -----------------------------
 def render_rotating_brief():
-    """
-    Render a short line under the title that changes every 5 seconds
-    using JavaScript inside st.html (no page reload).
-    """
+    """A short line under the title changing every 5 seconds via JS (no page reload)."""
     messages = [
         "Find licenses by name or text and view full, highlighted content.",
         "Quickly open any license and navigate back easily with top/bottom controls.",
-        "Toggle night mode for comfortable reading."
+        "Toggle night mode for comfortable reading.",
     ]
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
-
     html = f"""
     <div id="brief" style="font-size:0.95rem;color:{color};opacity:0.9;">
       <span id="briefText"></span>
@@ -109,48 +82,35 @@ def render_rotating_brief():
       let i = 0;
       function update() {{
         const el = document.getElementById('briefText');
-        if (el) {{
-          el.textContent = msgs[i % msgs.length];
-        }}
+        if (el) el.textContent = msgs[i % msgs.length];
       }}
-      update();                // initial
-      setInterval(() => {{     // rotate every 5s
-        i += 1;
-        update();
-      }}, 5000);
+      update();
+      setInterval(() => {{ i += 1; update(); }}, 5000);
     </script>
     """
-    # IMPORTANT: st.html supports unsafe_allow_javascript but not 'height'
     st.html(html, unsafe_allow_javascript=True)
 
 # -----------------------------
 # Utilities
 # -----------------------------
 def tokenize(text: str):
-    """Split text into lowercase word tokens."""
     return re.findall(r"\w+", (text or "").lower())
 
 def word_match_score(query: str, target: str) -> float:
-    """Simple percentage match of unique query words found in target."""
     q_tokens = set(tokenize(query))
     t_tokens = set(tokenize(target))
-    if not q_tokens:
-        return 0.0
+    if not q_tokens: return 0.0
     found = sum(1 for w in q_tokens if w in t_tokens)
     return round((found / len(q_tokens)) * 100.0, 2)
 
 def contains_any(query: str, target: str) -> bool:
-    """Return True if any query word is found in target text."""
     q_tokens = set(tokenize(query))
     t_tokens = set(tokenize(target))
     return any(w in t_tokens for w in q_tokens)
 
 def highlight_text(text: str, query: str) -> str:
-    """Highlight query words in text using <mark>…</mark> (case-insensitive)."""
-    if not text or not query:
-        return text or ""
-    def repl(match):
-        return f"<mark>{match.group(0)}</mark>"
+    if not text or not query: return text or ""
+    def repl(m): return f"<mark>{m.group(0)}</mark>"
     highlighted = text
     for word in sorted(set(tokenize(query)), key=len, reverse=True):
         pattern = re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE)
@@ -158,28 +118,18 @@ def highlight_text(text: str, query: str) -> str:
     return highlighted
 
 def to_raw_url(maybe_github_url: str) -> str:
-    """Convert GitHub blob URL to raw.githubusercontent URL if needed."""
-    if not maybe_github_url:
-        return maybe_github_url
+    if not maybe_github_url: return maybe_github_url
     if "github.com" in maybe_github_url and "/blob/" in maybe_github_url:
         parts = maybe_github_url.split("github.com/")[-1]
         owner_repo, _, branch_and_path = parts.partition("/blob/")
         branch, _, path = branch_and_path.partition("/")
-        raw = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{path}"
-        return raw
+        return f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{path}"
     return maybe_github_url
 
 @st.cache_data(show_spinner=False)
 def load_excel(source: str) -> pd.DataFrame:
-    """
-    Load Excel from a local path or a GitHub raw URL.
-    Requires:
-      - .xlsx -> engine='openpyxl'
-      - .xls  -> engine='xlrd'
-    """
     if not source:
         raise ValueError("Please provide a valid Excel path or raw URL.")
-
     source = to_raw_url(source.strip())
     parsed = urlparse(source)
     is_url = parsed.scheme in ("http", "https")
@@ -194,8 +144,7 @@ def load_excel(source: str) -> pd.DataFrame:
             buf.seek(0)
             df = pd.read_excel(buf, engine="xlrd")
     else:
-        suffix = source.lower().strip()
-        engine = "openpyxl" if suffix.endswith(".xlsx") else "xlrd"
+        engine = "openpyxl" if source.lower().endswith(".xlsx") else "xlrd"
         df = pd.read_excel(source, engine=engine)
 
     expected = ["License Name", "License Text", "License Family"]
@@ -211,28 +160,24 @@ def load_excel(source: str) -> pd.DataFrame:
     return df
 
 def run_name_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
-    if not query.strip():
-        return pd.DataFrame()
+    if not query.strip(): return pd.DataFrame()
     mask = df["License Name"].apply(lambda x: contains_any(query, x))
     subset = df[mask].copy()
     subset["Match %"] = subset["License Name"].apply(lambda x: word_match_score(query, x))
-    subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
-    return subset
+    return subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
 
 def run_text_search(df: pd.DataFrame, query: str) -> pd.DataFrame:
-    if not query.strip():
-        return pd.DataFrame()
+    if not query.strip(): return pd.DataFrame()
     mask = df["License Text"].apply(lambda x: contains_any(query, x))
     subset = df[mask].copy()
     subset["Match %"] = subset["License Text"].apply(lambda x: word_match_score(query, x))
-    subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
-    return subset
+    return subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
 
 # -----------------------------
-# Session state keys
+# Session state defaults
 # -----------------------------
 if "view" not in st.session_state:
-    st.session_state.view = "home"      # home | details
+    st.session_state.view = "home"
 if "last_results" not in st.session_state:
     st.session_state.last_results = None
 if "selected_license" not in st.session_state:
@@ -248,6 +193,15 @@ if "last_query_type" not in st.session_state:
 if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
 
+# Widget keys (to persist values across reruns)
+TEXT_QUERY_KEY = "license_text_query"
+NAME_SELECT_KEY = "license_select_value"
+
+if TEXT_QUERY_KEY not in st.session_state:
+    st.session_state[TEXT_QUERY_KEY] = ""
+if NAME_SELECT_KEY not in st.session_state:
+    st.session_state[NAME_SELECT_KEY] = "-- select --"
+
 # -----------------------------
 # Sidebar: Data source (hidden initially)
 # -----------------------------
@@ -258,8 +212,9 @@ with st.sidebar.expander("📄 Data Source", expanded=False):
         "Excel path or raw URL",
         value=st.session_state.data_source or default_raw,
         placeholder="e.g., ./Licenses.xlsx or a GitHub raw URL",
+        key="data_source_input",
     )
-    load_btn = st.button("Load Excel")
+    load_btn = st.button("Load Excel", key="load_excel_btn")
 
     if load_btn and source_input.strip():
         try:
@@ -289,9 +244,7 @@ apply_global_polish()
 
 top_cols = st.columns([6, 1])
 with top_cols[0]:
-    # Left-aligned title
     st.title("License Search")
-    # Rotating brief just under the title (no page reload)
     render_rotating_brief()
 
 with top_cols[1]:
@@ -303,8 +256,7 @@ with top_cols[1]:
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-# Apply dark theme (if enabled) after drawing top bar
-apply_theme()
+apply_theme()  # apply after top bar
 
 # -----------------------------
 # Search UI (left: text search, right: license selector)
@@ -312,46 +264,53 @@ apply_theme()
 left, right = st.columns(2)
 
 with left:
-    # LEFT header: plain text, larger size, no background
     st.markdown('<div class="section-header">Search within License Text</div>', unsafe_allow_html=True)
-    text_query = st.text_input("", placeholder="e.g., warranty, redistribution, exceptions", label_visibility="collapsed")
-    text_search_clicked = st.button("License Text Search")
+    text_query = st.text_input(
+        "", placeholder="e.g., warranty, redistribution, exceptions",
+        label_visibility="collapsed", key=TEXT_QUERY_KEY
+    )
+    text_search_clicked = st.button("License Text Search", key="text_search_btn")
     if text_search_clicked:
-        st.session_state.last_results = run_text_search(df, text_query)
-        st.session_state.last_query = text_query
+        st.session_state.last_results = run_text_search(df, st.session_state[TEXT_QUERY_KEY])
+        st.session_state.last_query = st.session_state[TEXT_QUERY_KEY]
         st.session_state.last_query_type = "text"
-        st.rerun()  # rerun after updating state (outside callback) [1](https://docs.streamlit.io/develop/api-reference/execution-flow/st.rerun)
+        st.rerun()
 
 with right:
-    # RIGHT header: plain text, larger size, no background
     st.markdown('<div class="section-header">License Search</div>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
-    selected_name = st.selectbox("", lic_names, index=0, label_visibility="collapsed")
-    # Open immediately when selected
-    if selected_name and selected_name != "-- select --":
-        st.session_state.selected_license = selected_name
+    # Selectbox bound to session_state key so value persists
+    selected_name = st.selectbox(
+        "", lic_names, index=lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0,
+        label_visibility="collapsed", key=NAME_SELECT_KEY
+    )
+    # Open immediately when selected (and not placeholder)
+    if st.session_state[NAME_SELECT_KEY] != "-- select --":
+        st.session_state.selected_license = st.session_state[NAME_SELECT_KEY]
         st.session_state.view = "details"
         st.rerun()
-    # Explicit search-by-name button (treat selection as query)
-    name_query = "" if selected_name == "-- select --" else selected_name
-    name_search_clicked = st.button("License Name Search")
+    # Explicit search button (treat selection as query)
+    name_search_clicked = st.button("License Name Search", key="name_search_btn")
     if name_search_clicked:
-        st.session_state.last_results = run_name_search(df, name_query)
-        st.session_state.last_query = name_query
+        q = st.session_state[NAME_SELECT_KEY] if st.session_state[NAME_SELECT_KEY] != "-- select --" else ""
+        st.session_state.last_results = run_name_search(df, q)
+        st.session_state.last_query = q
         st.session_state.last_query_type = "name"
         st.rerun()
 
 # -----------------------------
-# Helper actions (used in buttons)
+# Helpers: Home / Clear
 # -----------------------------
 def set_home(clear_results: bool):
     st.session_state.view = "home"
     st.session_state.selected_license = None
+    # Reset widget values too
+    st.session_state[NAME_SELECT_KEY] = "-- select --"
+    st.session_state[TEXT_QUERY_KEY] = ""
     if clear_results:
         st.session_state.last_results = None
         st.session_state.last_query = ""
         st.session_state.last_query_type = ""
-    # st.rerun should be invoked here in main flow (not in a callback) [1](https://docs.streamlit.io/develop/api-reference/execution-flow/st.rerun)
 
 # -----------------------------
 # Home view: results list
@@ -359,7 +318,6 @@ def set_home(clear_results: bool):
 if st.session_state.view == "home":
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
-        # Top controls: Back + Clear + Home
         ctop1, ctop2, ctop3 = st.columns([1, 1, 1])
 
         back_top_clicked = ctop1.button("⬅️ Back to search results", key="back_top")
@@ -379,7 +337,7 @@ if st.session_state.view == "home":
 
         st.markdown(f"### Results ({len(results)})")
         csv_bytes = results[["License Name", "License Family", "Match %"]].to_csv(index=False).encode("utf-8")
-        st.download_button("⬇️ Download results (CSV)", data=csv_bytes, file_name="license_search_results.csv", mime="text/csv")
+        st.download_button("⬇️ Download results (CSV)", data=csv_bytes, file_name="license_search_results.csv", mime="text/csv", key="dl_results_csv")
 
         st.dataframe(results[["License Name", "License Family", "Match %"]], use_container_width=True)
 
@@ -396,7 +354,6 @@ if st.session_state.view == "home":
                 st.session_state.view = "details"
                 st.rerun()
 
-        # Bottom controls: Back + Clear + Home
         st.divider()
         cbtm1, cbtm2, cbtm3 = st.columns([1, 1, 1])
 
@@ -428,7 +385,6 @@ if st.session_state.view == "details" and st.session_state.selected_license:
     else:
         row = sel.iloc[0]
 
-        # Top controls: Back + Clear + Home
         dtop1, dtop2, dtop3 = st.columns([1, 1, 1])
 
         detail_back_top_clicked = dtop1.button("⬅️ Back to search results", key="detail_back_top")
@@ -459,9 +415,8 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.divider()
 
         st.markdown("**Full License Text:**")
-        st.text_area(label="", value=row["License Text"], height=400)
+        st.text_area(label="", value=row["License Text"], height=400, key="full_license_text")
 
-        # Bottom controls: Back + Clear + Home
         dbtm1, dbtm2, dbtm3 = st.columns([1, 1, 1])
 
         detail_back_bottom_clicked = dbtm1.button("⬅️ Back to search results", key="detail_back_bottom")
@@ -476,6 +431,5 @@ if st.session_state.view == "details" and st.session_state.selected_license:
 
         detail_home_bottom_clicked = dbtm3.button("🏠 Home", key="detail_home_bottom")
         if detail_home_bottom_clicked:
-            set_home(clear_results=True)
-           
+            set            set_home(clear_results=True)
 
