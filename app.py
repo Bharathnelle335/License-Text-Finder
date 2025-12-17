@@ -46,10 +46,10 @@ def apply_global_polish():
 # -----------------------------
 # Rotating brief (static)
 # -----------------------------
-def render_rotating_brief():
+def render_brief():
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
     st.markdown(
-        f'<div class="muted" style="color:{color};">Select a license to view its full text instantly.</div>',
+        f'<div class="muted" style="color:{color};">Use Text Search to list matches by percentage, then open the one you want.</div>',
         unsafe_allow_html=True,
     )
 
@@ -126,19 +126,17 @@ def load_excel(source: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["License Name"], keep="first").reset_index(drop=True)
     return df
 
-def run_text_search(df: pd.DataFrame, query: str):
-    """
-    Returns the FIRST best-matching license row (Series) for a text query, or None.
-    """
+def run_text_search_df(df: pd.DataFrame, query: str) -> pd.DataFrame:
+    """Return all matches for query in License Text, sorted by Match % desc then name asc."""
     if not query.strip():
-        return None
+        return pd.DataFrame(columns=["License Name", "License Family", "Match %"])
     mask = df["License Text"].apply(lambda x: contains_any(query, x))
     subset = df[mask].copy()
     if subset.empty:
-        return None
+        return subset.assign(**{"Match %": []})
     subset["Match %"] = subset["License Text"].apply(lambda x: word_match_score(query, x))
-    best = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).iloc[0]
-    return best
+    subset = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).reset_index(drop=True)
+    return subset
 
 # -----------------------------
 # Session state defaults
@@ -155,6 +153,8 @@ if "last_query" not in st.session_state:
     st.session_state.last_query = ""
 if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
+if "text_results" not in st.session_state:
+    st.session_state.text_results = None  # store DataFrame of text search results
 
 # Widget keys (persist values)
 TEXT_QUERY_KEY = "license_text_query"
@@ -205,7 +205,7 @@ apply_global_polish()
 top_cols = st.columns([6, 1])
 with top_cols[0]:
     st.title("License Search")
-    render_rotating_brief()
+    render_brief()
 with top_cols[1]:
     theme_clicked = st.button("🌙" if not st.session_state.night_mode else "☀️", key="theme_toggle")
     if theme_clicked:
@@ -219,11 +219,9 @@ apply_theme()  # apply after top bar
 def on_license_changed():
     val = st.session_state.get(NAME_SELECT_KEY, "-- select --")
     if val == "-- select --":
-        # Return to home when cleared
         st.session_state.view = "home"
         st.session_state.selected_license = None
     else:
-        # Instantly open the selected license
         st.session_state.selected_license = val
         st.session_state.view = "details"
 
@@ -232,7 +230,7 @@ def on_license_changed():
 # -----------------------------
 left, right = st.columns(2)
 
-# --- Left: Text Search (no results table; open best match) ---
+# --- Left: Text Search (show results list, then let user open one) ---
 with left:
     st.markdown('<div class="section-title">Search within License Text</div>', unsafe_allow_html=True)
     text_query = st.text_input(
@@ -241,35 +239,32 @@ with left:
         label_visibility="collapsed",
         key=TEXT_QUERY_KEY
     )
-    open_best_btn = st.button("Open best match from Text Search", key="open_best_from_text")
-    if open_best_btn:
-        best = run_text_search(df, st.session_state[TEXT_QUERY_KEY])
-        if best is None:
-            st.warning("No matches found. Try different keywords.")
-        else:
-            st.session_state.selected_license = best["License Name"]
-            st.session_state.view = "details"
-            st.session_state.last_query = st.session_state[TEXT_QUERY_KEY]
-            st.rerun()
+    search_clicked = st.button("Search License Text", key="text_search_btn")
+    if search_clicked:
+        results = run_text_search_df(df, st.session_state[TEXT_QUERY_KEY])
+        st.session_state.text_results = results
+        st.session_state.last_query = st.session_state[TEXT_QUERY_KEY]
+        st.session_state.view = "home"   # keep in home to show results
+        st.rerun()
 
-# --- Right: License select (instant open on selection) ---
+# --- Right: License select (instant open) ---
 with right:
     st.markdown('<div class="section-title">License Select</div>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
     selected_index = lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0
-
     st.selectbox(
         "",
         lic_names,
         index=selected_index,
         label_visibility="collapsed",
         key=NAME_SELECT_KEY,
-        on_change=on_license_changed,  # proper callback avoids syntax issues
+        on_change=on_license_changed,
     )
 
 # -----------------------------
-# Details view: selected license
+# Results (Text Search only) + Details view
 # -----------------------------
+# If we are on details view, show the selected license text
 if st.session_state.view == "details" and st.session_state.selected_license:
     sel = df[df["License Name"] == st.session_state.selected_license].head(1)
     if sel.empty:
@@ -299,8 +294,6 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.session_state.view = "home"
             st.session_state.selected_license = None
             st.session_state[NAME_SELECT_KEY] = "-- select --"
-            st.session_state[TEXT_QUERY_KEY] = ""
-            st.session_state.last_query = ""
             st.rerun()
         if clear_clicked:
             st.session_state.selected_license = None
@@ -308,8 +301,31 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.session_state[NAME_SELECT_KEY] = "-- select --"
             st.rerun()
 
-# -----------------------------
-# Home view
-# -----------------------------
+# If we are on home view, and text_results exist, show the result list
 if st.session_state.view == "home":
-    st.info("Select a license on the right, or use Text Search and open the best match.")
+    results = st.session_state.text_results
+    if results is not None:
+        if len(results) == 0:
+            st.warning("No matches found. Try different keywords.")
+        else:
+            st.markdown(f"### Results ({len(results)})")
+            # Show the summary table
+            st.dataframe(results[["License Name", "License Family", "Match %"]], use_container_width=True)
+
+            st.divider()
+            st.markdown("#### Open a license")
+            # Row-level View buttons
+            for i, row in results.iterrows():
+                c1, c2, c3, c4 = st.columns([6, 3, 2, 2])
+                c1.write(f"**{row['License Name']}**")
+                c2.write(f"Family: {row['License Family']}")
+                c3.write(f"Match: {row['Match %']}%")
+                view_clicked = c4.button("View", key=f"view_{i}")
+                if view_clicked:
+                    st.session_state.selected_license = row["License Name"]
+                    st.session_state.view = "details"
+                    # keep last_query for highlighting
+                    st.rerun()
+    else:
+        st.info("Type a keyword on the left and click **Search License Text** to list matches.")
+
