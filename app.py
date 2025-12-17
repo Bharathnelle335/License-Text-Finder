@@ -19,13 +19,12 @@ def apply_theme():
     """Apply light/dark CSS based on st.session_state.night_mode."""
     dark_css = """
     <style>
-    /* Minimal dark tweaks (extend as needed) */
     html, body, [class*="css"]  {
         background-color: #0B1221 !important;
         color: #e6edf3 !important;
     }
     .stTextArea textarea { background-color: #0f172a !important; color: #e6edf3 !important; }
-    .stSelectbox div[data-baseweb="select"] { background-color: #0f172a !important; color: #e6edf3 !important; }
+    div[data-baseweb="select"] { background-color: #0f172a !important; color: #e6edf3 !important; }
     </style>
     """
     if st.session_state.get("night_mode", False):
@@ -45,10 +44,9 @@ def apply_global_polish():
     st.markdown(global_css, unsafe_allow_html=True)
 
 # -----------------------------
-# Rotating brief (optional, minimal)
+# Rotating brief (static)
 # -----------------------------
 def render_rotating_brief():
-    """Simple static brief line."""
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
     st.markdown(
         f'<div class="muted" style="color:{color};">Select a license to view its full text instantly.</div>',
@@ -128,10 +126,9 @@ def load_excel(source: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["License Name"], keep="first").reset_index(drop=True)
     return df
 
-def run_text_search(df: pd.DataFrame, query: str) -> pd.Series | None:
+def run_text_search(df: pd.DataFrame, query: str):
     """
-    Returns the FIRST matching license row (Series) for a text query, or None.
-    (We no longer present a results table.)
+    Returns the FIRST best-matching license row (Series) for a text query, or None.
     """
     if not query.strip():
         return None
@@ -140,7 +137,6 @@ def run_text_search(df: pd.DataFrame, query: str) -> pd.Series | None:
     if subset.empty:
         return None
     subset["Match %"] = subset["License Text"].apply(lambda x: word_match_score(query, x))
-    # pick best match
     best = subset.sort_values(by=["Match %", "License Name"], ascending=[False, True]).iloc[0]
     return best
 
@@ -218,11 +214,25 @@ with top_cols[1]:
 apply_theme()  # apply after top bar
 
 # -----------------------------
+# Callbacks
+# -----------------------------
+def on_license_changed():
+    val = st.session_state.get(NAME_SELECT_KEY, "-- select --")
+    if val == "-- select --":
+        # Return to home when cleared
+        st.session_state.view = "home"
+        st.session_state.selected_license = None
+    else:
+        # Instantly open the selected license
+        st.session_state.selected_license = val
+        st.session_state.view = "details"
+
+# -----------------------------
 # Search UI (left: text search, right: license selector)
 # -----------------------------
 left, right = st.columns(2)
 
-# --- Left: Text Search (no results table; just stores query, offers open best match) ---
+# --- Left: Text Search (no results table; open best match) ---
 with left:
     st.markdown('<div class="section-title">Search within License Text</div>', unsafe_allow_html=True)
     text_query = st.text_input(
@@ -248,22 +258,17 @@ with right:
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
     selected_index = lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0
 
-    selected_value = st.selectbox(
+    st.selectbox(
         "",
         lic_names,
         index=selected_index,
         label_visibility="collapsed",
         key=NAME_SELECT_KEY,
-        on_change=lambda: (
-            st.session_state.update({
-                "selected_license": None if st.session_state[NAME_SELECT_KEY] == "-- select --" else st.session_state[NAME_SELECT_KEY],
-                "view": "details" if st.session_state[NAME_SELECT_KEY] != "-- select --" else "home"
-            })
-        )
+        on_change=on_license_changed,  # proper callback avoids syntax issues
     )
 
 # -----------------------------
-# Details view: selected license (opens immediately on selection)
+# Details view: selected license
 # -----------------------------
 if st.session_state.view == "details" and st.session_state.selected_license:
     sel = df[df["License Name"] == st.session_state.selected_license].head(1)
@@ -275,7 +280,6 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.caption(f"License Family: {row['License Family']}")
 
         recent_query = st.session_state.get("last_query", "").strip()
-
         if recent_query:
             st.markdown("**Highlighted text (matches marked):**")
             st.markdown(
@@ -287,7 +291,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.markdown("**Full License Text:**")
         st.text_area(label="", value=row["License Text"], height=400, key="full_license_text")
 
-        # Minimal navigation (optional): a single Home button
+        # Minimal navigation
         c1, c2 = st.columns([1, 1])
         home_clicked = c1.button("🏠 Home", key="home_btn")
         clear_clicked = c2.button("🧹 Clear selection", key="clear_btn")
@@ -305,8 +309,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.rerun()
 
 # -----------------------------
-# Home view: nothing to show (no results table anymore)
+# Home view
 # -----------------------------
 if st.session_state.view == "home":
-   
-
+    st.info("Select a license on the right, or use Text Search and open the best match.")
