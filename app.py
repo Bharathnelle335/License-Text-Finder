@@ -69,7 +69,7 @@ def render_rotating_brief():
     """A short line under the title changing every 5 seconds via JS (no page reload)."""
     messages = [
         "Find licenses by name or text and view full, highlighted content.",
-        "Quickly open any license and navigate back easily with top/bottom controls.",
+        "Quickly open any license from results and navigate back easily.",
         "Toggle night mode for comfortable reading.",
     ]
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
@@ -88,9 +88,7 @@ def render_rotating_brief():
       setInterval(() => {{ i += 1; update(); }}, 5000);
     </script>
     """
-    # st.html: JS allowed via unsafe_allow_javascript; no 'height' param in 1.52
-    st.html(html, unsafe_allow_javascript=True)
-    # Reference: st.html signature (no height), JS flag introduced in 1.52 [2](https://pypi.org/project/streamlit-html-components/)[3](https://docs.streamlit.io/develop/api-reference/text/st.html)
+    st.html(html, unsafe_allow_javascript=True)  # st.html has no 'height' in 1.52
 
 # -----------------------------
 # Utilities
@@ -195,7 +193,7 @@ if "last_query_type" not in st.session_state:
 if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
 
-# Widget keys (to persist values across reruns)
+# Widget keys (persist values)
 TEXT_QUERY_KEY = "license_text_query"
 NAME_SELECT_KEY = "license_select_value"
 
@@ -282,22 +280,24 @@ with right:
     st.markdown('<div class="section-header">License Search</div>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
     selected_index = lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0
-    selected_name = st.selectbox(
+    _ = st.selectbox(
         "", lic_names, index=selected_index,
         label_visibility="collapsed", key=NAME_SELECT_KEY
     )
-    # Open immediately when selected (and not placeholder)
-    if st.session_state[NAME_SELECT_KEY] != "-- select --":
-        st.session_state.selected_license = st.session_state[NAME_SELECT_KEY]
-        st.session_state.view = "details"
-        st.rerun()
-    # Explicit search button (treat selection as query)
+    # IMPORTANT: no auto-open here; we keep selection for the Name Search button.
     name_search_clicked = st.button("License Name Search", key="name_search_btn")
     if name_search_clicked:
-        q = st.session_state[NAME_SELECT_KEY] if st.session_state[NAME_SELECT_KEY] != "-- select --" else ""
-        st.session_state.last_results = run_name_search(df, q)
-        st.session_state.last_query = q
-        st.session_state.last_query_type = "name"
+        q = st.session_state[NAME_SELECT_KEY]
+        if q == "-- select --":
+            # If nothing selected, do nothing or clear results
+            st.session_state.last_results = None
+            st.session_state.last_query = ""
+            st.session_state.last_query_type = ""
+        else:
+            st.session_state.last_results = run_name_search(df, q)
+            st.session_state.last_query = q
+            st.session_state.last_query_type = "name"
+        st.session_state.view = "home"
         st.rerun()
 
 # -----------------------------
@@ -321,6 +321,7 @@ def set_home(clear_results: bool):
 if st.session_state.view == "home":
     results = st.session_state.last_results
     if results is not None and len(results) > 0:
+        # Top controls: Back + Clear + Home
         ctop1, ctop2, ctop3 = st.columns([1, 1, 1])
 
         back_top_clicked = ctop1.button("⬅️ Back to search results", key="back_top")
@@ -357,6 +358,7 @@ if st.session_state.view == "home":
                 st.session_state.view = "details"
                 st.rerun()
 
+        # Bottom controls: Back + Clear + Home
         st.divider()
         cbtm1, cbtm2, cbtm3 = st.columns([1, 1, 1])
 
@@ -388,6 +390,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
     else:
         row = sel.iloc[0]
 
+        # Top controls: Back + Clear + Home
         dtop1, dtop2, dtop3 = st.columns([1, 1, 1])
 
         detail_back_top_clicked = dtop1.button("⬅️ Back to search results", key="detail_back_top")
@@ -420,6 +423,7 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         st.markdown("**Full License Text:**")
         st.text_area(label="", value=row["License Text"], height=400, key="full_license_text")
 
+        # Bottom controls: Back + Clear + Home
         dbtm1, dbtm2, dbtm3 = st.columns([1, 1, 1])
 
         detail_back_bottom_clicked = dbtm1.button("⬅️ Back to search results", key="detail_back_bottom")
@@ -435,4 +439,4 @@ if st.session_state.view == "details" and st.session_state.selected_license:
         detail_home_bottom_clicked = dbtm3.button("🏠 Home", key="detail_home_bottom")
         if detail_home_bottom_clicked:
             set_home(clear_results=True)
-
+            st.rerun()
