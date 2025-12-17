@@ -88,7 +88,9 @@ def render_rotating_brief():
       setInterval(() => {{ i += 1; update(); }}, 5000);
     </script>
     """
+    # st.html: JS allowed via unsafe_allow_javascript; no 'height' param in 1.52
     st.html(html, unsafe_allow_javascript=True)
+    # Reference: st.html signature (no height), JS flag introduced in 1.52 [2](https://pypi.org/project/streamlit-html-components/)[3](https://docs.streamlit.io/develop/api-reference/text/st.html)
 
 # -----------------------------
 # Utilities
@@ -279,9 +281,9 @@ with left:
 with right:
     st.markdown('<div class="section-header">License Search</div>', unsafe_allow_html=True)
     lic_names = ["-- select --"] + sorted(df["License Name"].unique())
-    # Selectbox bound to session_state key so value persists
+    selected_index = lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0
     selected_name = st.selectbox(
-        "", lic_names, index=lic_names.index(st.session_state[NAME_SELECT_KEY]) if st.session_state[NAME_SELECT_KEY] in lic_names else 0,
+        "", lic_names, index=selected_index,
         label_visibility="collapsed", key=NAME_SELECT_KEY
     )
     # Open immediately when selected (and not placeholder)
@@ -302,6 +304,7 @@ with right:
 # Helpers: Home / Clear
 # -----------------------------
 def set_home(clear_results: bool):
+    """Return to home and optionally clear search state + widget values."""
     st.session_state.view = "home"
     st.session_state.selected_license = None
     # Reset widget values too
@@ -431,5 +434,5 @@ if st.session_state.view == "details" and st.session_state.selected_license:
 
         detail_home_bottom_clicked = dbtm3.button("🏠 Home", key="detail_home_bottom")
         if detail_home_bottom_clicked:
-            set            set_home(clear_results=True)
+            set_home(clear_results=True)
 
