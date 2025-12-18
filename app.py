@@ -25,6 +25,7 @@ def apply_theme():
     }
     .stTextArea textarea { background-color: #0f172a !important; color: #e6edf3 !important; }
     div[data-baseweb="select"] { background-color: #0f172a !important; color: #e6edf3 !important; }
+    .muted { color: #94a3b8; }
     </style>
     """
     if st.session_state.get("night_mode", False):
@@ -38,18 +39,18 @@ def apply_global_polish():
     global_css = """
     <style>
     .section-title { font-size: 1.1rem; font-weight: 600; margin: 0.25rem 0 0.5rem 0; }
-    .muted { color: #64748b; }
+    .pane-title { font-weight: 600; margin-bottom: 0.5rem; }
     </style>
     """
     st.markdown(global_css, unsafe_allow_html=True)
 
 # -----------------------------
-# Rotating brief (static)
+# Brief (static)
 # -----------------------------
 def render_brief():
     color = "#e6edf3" if st.session_state.get("night_mode", False) else "#374151"
     st.markdown(
-        f'<div class="muted" style="color:{color};">Use Text Search to list matches by percentage, then open the one you want.</div>',
+        f'<div class="muted" style="color:{color};">Use Text Search to list matches by percentage, then open and compare with Next/Prev.</div>',
         unsafe_allow_html=True,
     )
 
@@ -154,9 +155,13 @@ if "last_query" not in st.session_state:
 if "night_mode" not in st.session_state:
     st.session_state.night_mode = False
 if "text_results" not in st.session_state:
-    st.session_state.text_results = None  # store DataFrame of text search results
+    st.session_state.text_results = None  # DataFrame of text search results
 
-# Widget keys (persist values)
+# Track index of selected item inside current text_results (for Next/Prev)
+if "selected_index" not in st.session_state:
+    st.session_state.selected_index = None
+
+# Widget keys
 TEXT_QUERY_KEY = "license_text_query"
 NAME_SELECT_KEY = "license_select_value"
 if TEXT_QUERY_KEY not in st.session_state:
@@ -218,6 +223,8 @@ apply_theme()  # apply after top bar
 # -----------------------------
 def on_license_changed():
     val = st.session_state.get(NAME_SELECT_KEY, "-- select --")
+    # When dropdown changes, clear index tracking and open details
+    st.session_state.selected_index = None
     if val == "-- select --":
         st.session_state.view = "home"
         st.session_state.selected_license = None
@@ -225,12 +232,22 @@ def on_license_changed():
         st.session_state.selected_license = val
         st.session_state.view = "details"
 
+def select_by_index(idx: int):
+    """Select license by index from current text_results."""
+    results = st.session_state.text_results
+    if results is None or len(results) == 0:
+        return
+    idx = max(0, min(idx, len(results) - 1))
+    st.session_state.selected_index = idx
+    st.session_state.selected_license = results.iloc[idx]["License Name"]
+    st.session_state.view = "details"
+
 # -----------------------------
 # Search UI (left: text search, right: license selector)
 # -----------------------------
 left, right = st.columns(2)
 
-# --- Left: Text Search (show results list, then let user open one) ---
+# --- Left: Text Search (results list; open one) ---
 with left:
     st.markdown('<div class="section-title">Search within License Text</div>', unsafe_allow_html=True)
     text_query = st.text_input(
@@ -244,7 +261,9 @@ with left:
         results = run_text_search_df(df, st.session_state[TEXT_QUERY_KEY])
         st.session_state.text_results = results
         st.session_state.last_query = st.session_state[TEXT_QUERY_KEY]
-        st.session_state.view = "home"   # keep in home to show results
+        # Reset any previously selected index
+        st.session_state.selected_index = None
+        st.session_state.view = "home"   # stay in home to show results
         st.rerun()
 
 # --- Right: License select (instant open) ---
@@ -262,29 +281,97 @@ with right:
     )
 
 # -----------------------------
-# Results (Text Search only) + Details view
+# Details view: side-by-side panes + Copy + Next/Prev
 # -----------------------------
-# If we are on details view, show the selected license text
 if st.session_state.view == "details" and st.session_state.selected_license:
+    # Resolve selected index within text_results (if any)
+    results = st.session_state.text_results
+    if results is not None and len(results) > 0:
+        # If index not known, infer from license name
+        if st.session_state.selected_index is None:
+            try:
+                st.session_state.selected_index = results.index[results["License Name"] == st.session_state.selected_license].tolist()[0]
+            except IndexError:
+                st.session_state.selected_index = None
+
+    # Fetch selected license row from df
     sel = df[df["License Name"] == st.session_state.selected_license].head(1)
     if sel.empty:
         st.error("Selected license not found.")
     else:
         row = sel.iloc[0]
-        st.markdown(f"## 📄 {row['License Name']}")
-        st.caption(f"License Family: {row['License Family']}")
 
-        recent_query = st.session_state.get("last_query", "").strip()
-        if recent_query:
-            st.markdown("**Highlighted text (matches marked):**")
-            st.markdown(
-                highlight_text(row["License Text"], recent_query),
-                unsafe_allow_html=True
-            )
-            st.divider()
+        # Header + tools
+        head_cols = st.columns([6, 3, 1, 1])
+        with head_cols[0]:
+            st.markdown(f"## 📄 {row['License Name']}")
+            st.caption(f"License Family: {row['License Family']}")
+        with head_cols[1]:
+            # Show position in results, if available
+            if st.session_state.selected_index is not None and results is not None:
+                pos = st.session_state.selected_index + 1
+                total = len(results)
+                st.markdown(f"**Result:** {pos}/{total}")
+        with head_cols[2]:
+            prev_clicked = st.button("◀ Prev", key="prev_btn", disabled=not (results is not None and len(results) > 1))
+        with head_cols[3]:
+            next_clicked = st.button("Next ▶", key="next_btn", disabled=not (results is not None and len(results) > 1))
 
-        st.markdown("**Full License Text:**")
-        st.text_area(label="", value=row["License Text"], height=400, key="full_license_text")
+        # Navigate
+        if results is not None and len(results) > 0 and st.session_state.selected_index is not None:
+            if prev_clicked:
+                select_by_index(st.session_state.selected_index - 1)
+                st.rerun()
+            if next_clicked:
+                select_by_index(st.session_state.selected_index + 1)
+                st.rerun()
+
+        # Two panes side-by-side
+        pane_left, pane_right = st.columns(2)
+
+        # LEFT: query + highlighted matches
+        with pane_left:
+            st.markdown('<div class="pane-title">🔎 Search & Highlights</div>', unsafe_allow_html=True)
+            recent_query = st.session_state.get("last_query", "").strip()
+            if recent_query:
+                st.text_input("Search query", value=recent_query, label_visibility="visible", key="readonly_query", disabled=True)
+                st.markdown("**Highlighted matches (case-insensitive):**")
+                st.markdown(
+                    highlight_text(row["License Text"], recent_query),
+                    unsafe_allow_html=True
+                )
+            else:
+                st.info("No active search query. Use **Search within License Text** to highlight matches.")
+
+        # RIGHT: full text + copy
+        with pane_right:
+            st.markdown('<div class="pane-title">📄 Full License Text</div>', unsafe_allow_html=True)
+
+            # Use st.code to get Streamlit's built-in copy icon
+            st.code(row["License Text"], language="text")
+
+            # Optional explicit copy button (JS-based) for long texts
+            # Render a hidden <textarea> mirroring the content
+            escaped = row["License Text"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            st.markdown(f'<textarea id="license_text_block" style="position:absolute; left:-9999px;">{escaped}</textarea>', unsafe_allow_html=True)
+            copy_clicked = st.button("📋 Copy license text", key="copy_btn")
+            if copy_clicked:
+                # Use st.html to run a tiny JS snippet that copies the hidden textarea
+                js = """
+                <script>
+                const el = document.getElementById('license_text_block');
+                if (navigator.clipboard && el) {
+                  navigator.clipboard.writeText(el.value).then(() => {
+                    window.parent.postMessage({type: 'streamlit:setComponentValue', value: 'copied'}, '*');
+                  });
+                }
+                </script>
+                """
+                try:
+                    st.html(js, unsafe_allow_javascript=True)
+                    st.success("Copied to clipboard.")
+                except Exception:
+                    st.info("Copy icon (top-right of the code block) is available if this button is blocked.")
 
         # Minimal navigation
         c1, c2 = st.columns([1, 1])
@@ -301,7 +388,9 @@ if st.session_state.view == "details" and st.session_state.selected_license:
             st.session_state[NAME_SELECT_KEY] = "-- select --"
             st.rerun()
 
-# If we are on home view, and text_results exist, show the result list
+# -----------------------------
+# Home view: Text Search results list
+# -----------------------------
 if st.session_state.view == "home":
     results = st.session_state.text_results
     if results is not None:
@@ -309,7 +398,6 @@ if st.session_state.view == "home":
             st.warning("No matches found. Try different keywords.")
         else:
             st.markdown(f"### Results ({len(results)})")
-            # Show the summary table
             st.dataframe(results[["License Name", "License Family", "Match %"]], use_container_width=True)
 
             st.divider()
@@ -323,6 +411,7 @@ if st.session_state.view == "home":
                 view_clicked = c4.button("View", key=f"view_{i}")
                 if view_clicked:
                     st.session_state.selected_license = row["License Name"]
+                    st.session_state.selected_index = i  # <-- track index so Next/Prev works
                     st.session_state.view = "details"
                     # keep last_query for highlighting
                     st.rerun()
